@@ -1,0 +1,13 @@
+id: exposed-git-config
+name: Repositorio .git expuesto (.git/config)
+severity: high
+cwe: CWE-538
+protocol: http
+requests:
+  - method: GET
+    path: /.git/config
+    matchers-condition: and
+    matchers:
+      - {type: status, status: [200]}
+      - {type: word, part: body, words: ["[core]"]}
+remediation: Bloquear el acceso a /.git en el servidor web y retirar el directorio del despliegue.

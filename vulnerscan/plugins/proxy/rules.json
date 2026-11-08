@@ -1,0 +1,6 @@
+[
+  {"match": {"host": "testphp.vulnweb.com", "method": "GET", "path_regex": "^/listproducts"},
+   "set_headers": {"X-Vulnerscan": "1"},
+   "set_query": {},
+   "replace_body": null}
+]

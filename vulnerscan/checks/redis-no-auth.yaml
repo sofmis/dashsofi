@@ -1,0 +1,10 @@
+id: redis-no-auth
+name: Redis responde sin autenticación
+severity: critical
+cwe: CWE-306
+protocol: tcp
+port: 6379
+send: "PING\r\n"
+matchers:
+  - {type: word, part: banner, words: ["+PONG"]}
+remediation: Habilitar requirepass/ACL y limitar el acceso por red.
