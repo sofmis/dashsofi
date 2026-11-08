@@ -1,0 +1,26 @@
+services:
+  orchestrator:
+    build: {context: ., dockerfile: orchestrator/Dockerfile}
+    ports: ["127.0.0.1:8000:8000"]
+    env_file: .env
+    volumes: ["./checks:/checks"]
+    depends_on: [network, web, custom, code, osaudit]
+  network:
+    build: {context: ./plugins, dockerfile: network/Dockerfile}
+    cap_add: [NET_RAW, NET_ADMIN]   # necesario para el SYN scan con Scapy
+  web:
+    build: {context: ./plugins, dockerfile: web/Dockerfile}
+    shm_size: "1gb"                 # Chromium
+  custom:
+    build: {context: ./plugins, dockerfile: custom/Dockerfile}
+    volumes: ["./checks:/checks:ro"]
+  code:
+    build: {context: ./plugins, dockerfile: code/Dockerfile}
+    volumes: ["./workspace:/workspace:ro"]
+  osaudit:                          # auditoría de SO autenticada (SSH/WinRM)
+    build: {context: ./plugins, dockerfile: osaudit/Dockerfile}
+  proxy:                            # docker compose --profile proxy up proxy
+    profiles: ["proxy"]
+    build: {context: ./plugins/proxy}
+    ports: ["127.0.0.1:8081:8081", "127.0.0.1:8082:8080"]
+    volumes: ["./plugins/proxy/rules.json:/rules/rules.json:ro", "./proxy-logs:/logs"]

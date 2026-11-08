@@ -1,0 +1,63 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>vulnerscan</title>
+<style>
+:root{--bg:#0f1419;--fg:#e6edf3;--mut:#8b98a5;--card:#1a222c;--br:#2a3644;--ac:#2f81f7}
+@media(prefers-color-scheme:light){:root{--bg:#f6f8fa;--fg:#1f2328;--mut:#59636e;--card:#fff;--br:#d0d7de;--ac:#0969da}}
+body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg)}main{max-width:1000px;margin:auto;padding:20px}
+h1{font-size:20px}.card{background:var(--card);border:1px solid var(--br);border-radius:8px;padding:14px;margin:12px 0}
+input,textarea,button{font:inherit;padding:8px;border-radius:6px;border:1px solid var(--br);background:var(--bg);color:var(--fg)}
+button{background:var(--ac);color:#fff;border:0;cursor:pointer}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row input[type=text]{flex:1;min-width:220px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px;border-bottom:1px solid var(--br);vertical-align:top}
+.tag{padding:2px 6px;border-radius:4px;font-size:12px;font-weight:600}.P0{background:#d1242f;color:#fff}.P1{background:#e16f24;color:#fff}.P2{background:#9a6700;color:#fff}.P3,.P4{background:var(--br)}
+small{color:var(--mut);display:block}
+</style></head><body><main>
+<h1>vulnerscan</h1>
+<div class="card"><div class="row"><input id="key" type="password" placeholder="API key"><input id="target" type="text" placeholder="IP, CIDR, dominio, URL, repo git o image:nginx:1.21">
+<button id="go">Escanear</button></div>
+<p><label><input type="checkbox" id="auth"> Confirmo que poseo o tengo autorización por escrito para auditar este objetivo.</label></p></div>
+<div class="card" id="status"><small>Sin escaneos.</small></div>
+<div class="card" id="ff" hidden><b>Repara esto primero</b><div id="ffl"></div></div>
+<div class="card" id="res" hidden><table><thead><tr><th>Prioridad</th><th>Hallazgo</th><th>Activo</th><th>Señales</th></tr></thead><tbody id="tb"></tbody></table></div>
+<details class="card"><summary style="cursor:pointer"><b>Auditoría de SO autenticada (SSH / WinRM)</b></summary>
+<p><small>Inventario de paquetes por SSH (Linux) o WinRM (Windows), solo lectura, cotejado con OSV (hallazgos confirmados). El host debe estar en ALLOWED_TARGETS y marcada la autorización de arriba.</small></p>
+<div class="row"><select id="ascheme"><option value="ssh">SSH (Linux)</option><option value="winrm">WinRM (Windows)</option></select>
+<input id="ahost" type="text" placeholder="host o IP"><input id="aport" type="number" placeholder="puerto" style="width:100px"></div>
+<div class="row"><input id="auser" type="text" placeholder="usuario"><input id="apass" type="password" placeholder="contraseña (o passphrase de la clave)"></div>
+<textarea id="akey" rows="3" style="width:100%;box-sizing:border-box" placeholder="(SSH, opcional) clave privada OpenSSH/PEM — si la usas, el campo anterior es su passphrase"></textarea>
+<div class="row"><button id="ago">Auditar (autenticado)</button><small id="amsg"></small></div></details>
+<div class="card"><b>Check personalizado (YAML declarativo)</b><br><textarea id="yml" rows="9" style="width:100%;box-sizing:border-box" placeholder="id: mi-check&#10;protocol: http&#10;severity: medium&#10;requests: ..."></textarea>
+<div class="row"><button id="save">Guardar check</button><small id="smsg"></small></div></div>
+<script>
+const $=id=>document.getElementById(id);
+const H=()=>({"Content-Type":"application/json","X-API-Key":$("key").value});
+const el=(t,txt,cls)=>{const e=document.createElement(t);e.textContent=txt??"";if(cls)e.className=cls;return e};
+$("go").onclick=async()=>{
+  const r=await fetch("/api/scans",{method:"POST",headers:H(),body:JSON.stringify({target:$("target").value,authorized:$("auth").checked})});
+  const j=await r.json(); if(!r.ok){$("status").textContent=j.detail||"Error";return}
+  poll(j.id)};
+async function poll(id){
+  const j=await (await fetch("/api/scans/"+id,{headers:H()})).json();
+  $("status").textContent=`Estado: ${j.status} · ${j.progress.slice(-1)[0]||""}`+(j.errors.length?` · errores: ${j.errors.join("; ")}`:"");
+  if(j.status==="done"){render(j);return} if(j.status==="failed")return; setTimeout(()=>poll(id),3000)}
+function render(j){
+  $("ff").hidden=$("res").hidden=false; const ffl=$("ffl"); ffl.replaceChildren();
+  j.fix_first.forEach((f,i)=>ffl.append(el("div",`${i+1}. ${f.title} — ${f.reason}`)));
+  const tb=$("tb"); tb.replaceChildren();
+  j.findings.forEach(f=>{const tr=document.createElement("tr");
+    const p=document.createElement("td");p.append(el("span",f.priority,"tag "+f.priority));
+    const a=document.createElement("td");a.append(el("div",f.title),el("small",f.remediation||f.evidence));
+    const s=[f.kev?"KEV":"",f.epss?`EPSS ${(f.epss*100).toFixed(1)}%`:"",f.cvss?`CVSS ${f.cvss}`:"",f.verification].filter(Boolean).join(" · ");
+    tr.append(p,a,el("td",f.asset),el("td",s));tb.append(tr)})}
+$("ago").onclick=async()=>{
+  const scheme=$("ascheme").value, host=$("ahost").value.trim();
+  if(!host){$("amsg").textContent="Falta host";return}
+  const options={}, pass=$("apass").value, key=scheme==="ssh"?$("akey").value.trim():"";
+  if($("auser").value)options.username=$("auser").value;
+  if(key){options.key=key; if(pass)options.key_passphrase=pass;} else if(pass)options.password=pass;
+  if($("aport").value)options.port=Number($("aport").value);
+  const r=await fetch("/api/scans",{method:"POST",headers:H(),body:JSON.stringify({target:scheme+":"+host,authorized:$("auth").checked,options})});
+  const j=await r.json(); if(!r.ok){$("amsg").textContent=j.detail||"Error";return}
+  $("amsg").textContent="Lanzado: "+j.id; poll(j.id)};
+$("save").onclick=async()=>{const r=await fetch("/api/checks",{method:"POST",headers:H(),body:JSON.stringify({yaml:$("yml").value})});
+  const j=await r.json();$("smsg").textContent=r.ok?"Guardado: "+j.saved:(j.detail||"Error")};
+</script></main></body></html>
