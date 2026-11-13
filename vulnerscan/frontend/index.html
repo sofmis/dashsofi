@@ -113,6 +113,11 @@ details.sub>summary::marker{color:var(--mut)}
 .controls .grow{flex:1;min-width:180px}
 .pill{border:1px solid var(--br);background:var(--card2);color:var(--fg);border-radius:99px;padding:5px 12px;font-size:11.5px;cursor:pointer;font-weight:600;font-family:var(--mono);letter-spacing:.02em}
 .pill[aria-pressed=true]{background:var(--ac);border-color:var(--ac2);color:var(--ink)}
+.ppill{display:inline-flex;align-items:center;gap:7px;padding:5px 11px 5px 10px}
+.pdot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--d);box-shadow:0 0 8px -1px var(--d)}
+.pcount{font-size:10px;color:var(--mut);background:color-mix(in srgb,var(--fg) 9%,transparent);border-radius:99px;padding:1px 6px;min-width:17px;text-align:center;font-weight:700}
+.pill.ppill[aria-pressed=true]{background:color-mix(in srgb,var(--d) 16%,var(--card2));border-color:var(--d);color:var(--fg);box-shadow:0 0 16px -5px var(--d),0 1px 0 color-mix(in srgb,#fff 10%,transparent) inset}
+.pill.ppill[aria-pressed=true] .pcount{background:color-mix(in srgb,var(--d) 32%,transparent);color:var(--fg)}
 /* tabla (estilo informe de seguridad) */
 table{width:100%;border-collapse:separate;border-spacing:0}
 th,td{text-align:left;padding:12px 12px;border-bottom:1px solid var(--br);vertical-align:top}
@@ -372,12 +377,6 @@ details.sub{border-radius:10px}
     </div>
   </div>
 </div>
-<footer class="foot">
-  <span class="lg"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> <b>vulnerscan</b></span>
-  <span>Riesgo = <b>KEV</b> (explotación activa) › <b>EPSS</b> (probabilidad) › <b>CVSS</b> (severidad), ponderado por confianza del hallazgo.</span>
-  <span class="spacer"></span>
-  <span>P0 crítico · P1 probable · P2 alto · P3 medio/bajo · P4 info</span>
-</footer>
 </div>
 
 <script>
@@ -582,8 +581,9 @@ function riskWord(c){return c.P0?"crítico":c.P1?"alto":c.P2?"elevado":(c.P3||c.
 
 function renderPrioPills(F){const box=$("prioPills");box.replaceChildren();
   const counts={};F.forEach(f=>counts[f.priority]=(counts[f.priority]||0)+1);
-  PR.forEach(p=>{if(!counts[p])return;const b=el("button",p+" ("+counts[p]+")","pill");
-    b.dataset.p=p;b.setAttribute("aria-pressed","false");
+  PR.forEach(p=>{if(!counts[p])return;const b=el("button",null,"pill ppill");
+    b.dataset.p=p;b.setAttribute("aria-pressed","false");b.style.setProperty("--d","var(--"+p.toLowerCase()+")");
+    b.append(el("span",null,"pdot"),el("span",p),el("span",String(counts[p]),"pcount"));
     b.onclick=()=>{FILT.prios.has(p)?FILT.prios.delete(p):FILT.prios.add(p);syncPrio();applyFilters()};
     box.append(b)})}
 function syncPrio(){document.querySelectorAll("#prioPills .pill").forEach(b=>b.setAttribute("aria-pressed",FILT.prios.has(b.dataset.p)));
