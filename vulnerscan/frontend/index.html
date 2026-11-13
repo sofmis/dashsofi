@@ -124,6 +124,23 @@ tr.drow>td{background:var(--bg2);border-bottom:2px solid var(--br)}
 .sig.res{color:var(--ok);border-color:var(--ok)}
 tr.frow.res .ttl{text-decoration:line-through;opacity:.7}
 tr.frow.res td{opacity:.75}
+/* progreso */
+#progwrap{margin-top:12px}
+.prbar{height:6px;border-radius:4px;background:var(--br);overflow:hidden;position:relative}
+.prbar.det i{display:block;height:100%;background:var(--ac);transition:width .4s ease}
+.prbar:not(.det) i{position:absolute;height:100%;width:34%;background:var(--ac);border-radius:4px;animation:ind 1.3s ease-in-out infinite}
+@keyframes ind{0%{left:-34%}100%{left:100%}}
+@media(prefers-reduced-motion:reduce){.prbar:not(.det) i{animation:none;left:0;width:100%;opacity:.4}}
+.prlog{list-style:none;margin:10px 0 0;padding:0;font-size:12px;color:var(--mut);max-height:150px;overflow:auto}
+.prlog li{padding:2px 0 2px 18px;position:relative}
+.prlog li::before{content:"✓";position:absolute;left:0;color:var(--ok)}
+.prlog li.cur::before{content:"";width:9px;height:9px;border:2px solid var(--br2);border-top-color:var(--ac);border-radius:50%;animation:sp .7s linear infinite;top:4px}
+/* inventario */
+#invCard summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
+#invCard summary::-webkit-details-marker{display:none}
+#invCard summary h3{margin:0}
+.invtbl{max-height:360px;overflow:auto;margin-top:8px}
+.invtbl table{width:100%}.invtbl td{font-size:12.5px}.invtbl td.v{font-family:ui-monospace,Menlo,monospace;color:var(--mut)}
 </style></head><body>
 <div class="wrap">
 <header>
@@ -172,7 +189,8 @@ tr.frow.res td{opacity:.75}
   </details>
 </div>
 
-<div class="card"><div class="statusbar" id="status"><span class="dot"></span><span>Sin escaneos.</span></div></div>
+<div class="card"><div class="statusbar" id="status"><span class="dot"></span><span>Sin escaneos.</span></div>
+<div id="progwrap" hidden><div class="prbar" id="prbar"><i></i></div><ul class="prlog" id="prlog"></ul></div></div>
 
 <div class="grid2">
   <div id="left">
@@ -196,6 +214,13 @@ tr.frow.res td{opacity:.75}
       <h3>Repara esto primero</h3>
       <ol class="ff" id="ff" style="margin:0;padding-left:4px;list-style:none"></ol>
     </div>
+
+    <details class="card" id="invCard" hidden>
+      <summary><h3>Inventario</h3><span class="hint" id="invCount"></span></summary>
+      <input id="invq" type="search" placeholder="Buscar en el inventario…" style="width:100%;margin:10px 0 0">
+      <div class="invtbl"><table><thead><tr><th>Nombre</th><th>Versión</th><th id="invPubTh" hidden>Editor</th></tr></thead><tbody id="invtb"></tbody></table></div>
+      <div class="hint" id="invMore" style="margin-top:6px"></div>
+    </details>
 
     <div class="card" id="resCard" hidden>
       <h3>Hallazgos</h3>
@@ -287,11 +312,19 @@ $("save").onclick=async()=>{let r,j;
   $("smsg").textContent=r.ok?"Guardado: "+j.saved:(j.detail||"Error")};
 
 /* ------------------------------- polling ------------------------------- */
+function renderProgress(j,running){
+  const w=$("progwrap");w.hidden=!running;
+  if(!running){return}
+  const steps=j.progress||[];const ul=$("prlog");ul.replaceChildren();
+  steps.forEach((s,i)=>{const li=el("li",s);if(i===steps.length-1)li.className="cur";ul.append(li)});
+  ul.scrollTop=ul.scrollHeight;
+}
 async function poll(id){
   let j;try{j=await (await fetch("/api/scans/"+id,{headers:H()})).json()}catch(e){setStatus("fail","Error de red");return}
   const last=(j.progress||[]).slice(-1)[0]||"";
   if(j.status==="queued"||j.status==="running"){
-    setStatus("run","Escaneando "+j.target+" · "+last,true);setTimeout(()=>poll(id),2500);return}
+    setStatus("run","Escaneando "+j.target+" · "+last,true);renderProgress(j,true);setTimeout(()=>poll(id),2500);return}
+  renderProgress(j,false);
   if(j.status==="failed"){setStatus("fail","Falló: "+((j.errors||[]).join("; ")||"error desconocido"));renderJob(j);loadHistory();return}
   setStatus("done","Completado · "+j.target+((j.errors||[]).length?" · errores: "+j.errors.join("; "):""));
   renderJob(j);loadHistory();
@@ -352,6 +385,7 @@ function renderJob(j){
   fillSelect($("fplugin"),"Todos los plugins",plugins);
   const assets=[...new Set(F.map(f=>f.asset).filter(Boolean))].sort();
   fillSelect($("fasset"),"Todos los activos",assets);
+  renderInventory(j);
   renderPrioPills(F);
   CMP=null;CMPKEYS=null;$("fcompare").value="";$("cmpSeg").hidden=true;$("cmpMsg").textContent="";
   populateCompare();
@@ -399,6 +433,27 @@ function renderSevBar(counts,total){const bar=$("sevbar"),leg=$("sevleg");bar.re
     i.title=p+": "+counts[p];bar.append(i)});
   PR.forEach(p=>{if(!counts[p])return;const s=el("span");const b=el("b");b.style.background="var(--"+p.toLowerCase()+")";
     s.append(b,el("span",p+" "+counts[p]));leg.append(s)})}
+/* inventario (escaneos autenticados) */
+let INV=[], INV_SW=false;
+function renderInventory(j){
+  const m=j.meta||{};const sw=m.inventory_sw||null;const pk=m.inventory||null;
+  INV_SW=!!sw;INV=(sw||pk||[]).map(x=>({name:x.name||"",version:x.version||"",publisher:x.publisher||""}));
+  const card=$("invCard");
+  if(!INV.length){card.hidden=true;return}
+  card.hidden=false;$("invPubTh").hidden=!INV_SW;
+  $("invCount").textContent=`· ${INV.length}${INV_SW?" programas":" paquetes"}${m.packages>INV.length||m.software>INV.length?" (muestra)":""}`;
+  $("invq").value="";drawInventory("");
+}
+function drawInventory(q){
+  q=(q||"").toLowerCase();
+  const tb=$("invtb");tb.replaceChildren();
+  const rows=INV.filter(x=>!q||(x.name+" "+x.version+" "+x.publisher).toLowerCase().includes(q));
+  rows.slice(0,600).forEach(x=>{const tr=document.createElement("tr");
+    tr.append(el("td",x.name));const v=el("td",x.version,"v");tr.append(v);
+    if(INV_SW)tr.append(el("td",x.publisher));tb.append(tr)});
+  $("invMore").textContent=rows.length>600?`Mostrando 600 de ${rows.length}. Afina la búsqueda.`:(q?`${rows.length} coincidencias.`:"");
+}
+$("invq").addEventListener("input",e=>drawInventory(e.target.value));
 function prioName(p){return {P0:"crítico",P1:"probable",P2:"alto",P3:"medio/bajo",P4:"info"}[p]}
 function riskWord(c){return c.P0?"crítico":c.P1?"alto":c.P2?"elevado":(c.P3||c.P4)?"bajo":"limpio"}
 

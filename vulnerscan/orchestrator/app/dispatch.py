@@ -18,7 +18,9 @@ async def run_plan(target, ttype, modules, options, job):
             return res
 
         if ttype == "osaudit":
-            if ok("osaudit"): await run("osaudit", target, "osaudit")
+            if ok("osaudit"):
+                res = await run("osaudit", target, "osaudit")
+                job["meta"] = res.get("meta", {})   # SO, inventario, ecosistema, notas
         elif ttype in ("repo", "container"):
             if ok("code"): await run("code", target, ttype)
         elif ttype == "network":

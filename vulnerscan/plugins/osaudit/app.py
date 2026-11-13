@@ -15,6 +15,14 @@ import collectors
 import distro
 import osv
 import winmatch
+import msrc
+
+
+def _sev_from_cvss(s):
+    if s is None:
+        return "info"
+    return ("critical" if s >= 9 else "high" if s >= 7 else
+            "medium" if s >= 4 else "low" if s > 0 else "info")
 
 app = FastAPI()
 HOST_RE = re.compile(r"^[A-Za-z0-9.\-_]{1,253}$")
@@ -105,6 +113,28 @@ def _windows_software_cpe(software, asset, cve_max):
     return out
 
 
+def _msrc_findings(data, os_info, asset, meta, months=3):
+    """Parches de seguridad de Windows faltantes según MSRC (CVRF). Defensivo."""
+    try:
+        hotfixes = data.get("hotfixes") or []
+        last = max([h.get("InstalledOn") for h in hotfixes if h.get("InstalledOn")] or [None])
+        res, note = msrc.scan(os_info.get("BuildNumber"), hotfixes,
+                              last_patch_date=last, months_max=months)
+    except Exception as e:
+        meta["msrc_note"] = f"MSRC error: {type(e).__name__}"
+        return []
+    meta["msrc_note"] = note
+    out = []
+    for f in res:
+        out.append(finding(
+            "osaudit", f"msrc-{f['cve']}", f"{f['cve']}: {f.get('title', f['cve'])}"[:140],
+            _sev_from_cvss(f.get("cvss")), asset, cves=[f["cve"]], cvss=f.get("cvss"),
+            confidence=0.5, advisory=f["cve"],
+            evidence=f"MSRC: KB{f['kb']} (actualización de seguridad) no detectado. {f.get('title', '')}"[:400],
+            remediation=f"Instalar KB{f['kb']} vía Windows Update/WSUS y verificar."))
+    return out
+
+
 @app.post("/scan")
 def scan(req: dict):
     target = req["target"]
@@ -132,6 +162,7 @@ def scan(req: dict):
         meta.update({"os": osrel.get("PRETTY_NAME") or osrel.get("ID"),
                      "packages": len(inv["packages"]), "pkg_format": inv["pkg_format"],
                      "kernel": inv.get("kernel")})
+        meta["inventory"] = [{"name": n, "version": v} for (n, v, _a) in inv["packages"][:3000]]
         eco, reliable, note = distro.linux_ecosystem(osrel)
         meta["ecosystem"] = eco
         if note:
@@ -162,8 +193,13 @@ def scan(req: dict):
         meta.update({"os": os_info.get("Caption"), "build": os_info.get("BuildNumber"),
                      "hotfixes": len(data.get("hotfixes") or []),
                      "software": len(data.get("software") or [])})
+        meta["inventory_sw"] = [{"name": s.get("DisplayName"), "version": s.get("DisplayVersion"),
+                                 "publisher": s.get("Publisher")}
+                                for s in (data.get("software") or [])[:3000]]
         meta["note"] = ("Windows: EOL + postura de actualización + cotejo CVE del software "
-                        "reconocido (vía CPE/NVD; define NVD_API_KEY para ir más rápido).")
+                        "reconocido (CPE/NVD) + parches del SO vía MSRC.")
         findings += _windows_findings(data, asset, cve_max=int(o.get("win_cve_max") or 60))
+        if o.get("msrc", True):
+            findings += _msrc_findings(data, os_info, asset, meta, months=int(o.get("msrc_months") or 3))
 
     return {"findings": findings, "meta": meta}

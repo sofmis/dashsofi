@@ -16,7 +16,7 @@ os.environ.setdefault("ALLOWED_TARGETS", "10.0.0.0/24,example.com")
 sys.path[:0] = [f"{ROOT}/plugins", f"{ROOT}/plugins/osaudit", f"{ROOT}/orchestrator/app"]
 
 import scope, normalize, prioritize          # orquestador
-import distro, cvss, osv, winmatch            # ayudantes osaudit
+import distro, cvss, osv, winmatch, msrc      # ayudantes osaudit
 import app as oa                              # app FastAPI osaudit
 from fastapi import HTTPException
 
@@ -89,6 +89,32 @@ def test_winmatch():
     check("win software no cve yet", sw[0]["cves"] == [] and sw[0]["confidence"] == 0.55)
 
 
+def test_msrc():
+    check("msrc kb_digits", msrc.kb_digits("KB5031234") == "5031234")
+    check("msrc installed set", msrc.installed_kb_set([{"HotFixID": "KB5030999"}, {"HotFixID": "x"}]) == {"5030999"})
+    check("msrc month_key", msrc._month_key("2024-11-12T08:00:00Z") == (2024, 11))
+    doc = {"ProductTree": {"FullProductName": [
+                {"ProductID": "11926", "Value": "Windows 10 Version 22H2 for x64-based Systems"},
+                {"ProductID": "11927", "Value": "Windows 10 Version 22H2 for ARM64-based Systems"},
+                {"ProductID": "12000", "Value": "Windows 11 Version 23H2 for x64-based Systems"}]},
+           "Vulnerability": [
+                {"CVE": "CVE-2024-1111", "Title": {"Value": "RCE en X"},
+                 "ProductStatuses": [{"Type": 3, "ProductID": ["11926", "11927"]}],
+                 "CVSSScoreSets": [{"BaseScore": 8.8, "Vector": "CVSS:3.1/AV:N", "ProductID": ["11926"]}],
+                 "Remediations": [{"Type": 2, "ProductID": ["11926"], "Description": {"Value": "5031234"}}]},
+                {"CVE": "CVE-2024-2222", "Title": {"Value": "Ya parcheado"},
+                 "ProductStatuses": [{"Type": 3, "ProductID": ["11926"]}],
+                 "Remediations": [{"Type": 2, "ProductID": ["11926"], "Description": {"Value": "5030999"}}]},
+                {"CVE": "CVE-2024-3333", "Title": {"Value": "Solo 23H2"},
+                 "ProductStatuses": [{"Type": 3, "ProductID": ["12000"]}],
+                 "Remediations": [{"Type": 2, "ProductID": ["12000"], "Description": {"Value": "5031000"}}]}]}
+    pids = msrc.resolve_product_ids(doc, ["Windows 10 Version 22H2"])
+    check("msrc resolve x64 only", pids == {"11926"})
+    res = msrc.parse_cvrf(doc, pids, {"5030999"})
+    check("msrc one missing patch", len(res) == 1 and res[0]["cve"] == "CVE-2024-1111")
+    check("msrc cvss+kb", res[0]["cvss"] == 8.8 and res[0]["kb"] == "5031234")
+
+
 def _fake_osv():
     class R:
         def __init__(s, j): s._j = j; s.status_code = 200
@@ -127,7 +153,7 @@ def test_osv_and_pipeline():
 
 
 if __name__ == "__main__":
-    for fn in (test_cvss, test_scope, test_parse_target, test_eol, test_winmatch, test_osv_and_pipeline):
+    for fn in (test_cvss, test_scope, test_parse_target, test_eol, test_winmatch, test_msrc, test_osv_and_pipeline):
         fn()
     print("\n" + ("ALL PASS" if not FAILS else f"FAILURES: {FAILS}"))
     sys.exit(1 if FAILS else 0)

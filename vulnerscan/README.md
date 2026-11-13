@@ -29,16 +29,19 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
   `known_host_key` (fijación opcional de la clave de host), `use_ssl`/`transport` (WinRM). También desde la UI.
 - Comandos ejecutados: solo lectura (`os-release`, `dpkg-query`/`rpm -qa`/DB de apk; en Windows `Get-CimInstance`,
   `Get-HotFix`, claves de desinstalación). Sin sudo ni escritura.
-- Windows: detección de build EOL + antigüedad de actualizaciones + inventario, **y cotejo CVE del software
-  reconocido** (Chrome, Firefox, 7-Zip, OpenSSL, etc.) generando un CPE que el orquestador expande a CVE vía NVD.
-  El mapa fabricante/producto es conservador (`winmatch.py`) para no inventar CVE de nombres ambiguos.
+- Windows: detección de build EOL + antigüedad de actualizaciones + inventario, **cotejo CVE del software
+  reconocido** (Chrome, Firefox, 7-Zip, OpenSSL, etc.) generando un CPE que el orquestador expande a CVE vía NVD
+  (mapa conservador en `winmatch.py`), **y parches del SO vía MSRC** (`msrc.py`, CVRF v3.0 oficial): compara los
+  boletines mensuales posteriores al último hotfix del host para detectar actualizaciones de seguridad faltantes
+  (heurística por fecha; se desactiva con `options.msrc=false` y cae a CPE/NVD si MSRC no está disponible).
 - `NVD_API_KEY` no es necesaria para el cotejo OSV (Linux), pero sí acelera el cotejo CPE→CVE de Windows y del resto.
 
 ## Persistencia e interfaz
 - Los escaneos se guardan en **SQLite** (`./data/vulnerscan.db`, volumen) y sobreviven a reinicios; `MAX_SCANS`
   limita el historial (500 por defecto). Para gran escala: PostgreSQL + cola.
-- La interfaz incluye resumen con anillo de riesgo y barra de severidad, filtros/búsqueda, **comparación entre
-  dos escaneos** (nuevas/resueltas), detalle expandible, historial e **informe descargable** (HTML imprimible a PDF).
+- La interfaz incluye resumen con anillo de riesgo y barra de severidad, **barra de progreso en vivo** durante el
+  escaneo, filtros/búsqueda, **comparación entre dos escaneos** (nuevas/resueltas), detalle expandible, historial,
+  **visor de inventario** (paquetes/software del escaneo autenticado) e **informe descargable** (HTML imprimible a PDF).
 
 ## Checks personalizados (alternativa segura a NASL)
 YAML en `./checks` o desde la UI (`POST /api/checks`). Solo GET/HEAD/OPTIONS o TCP + matchers. Ver `checks/`.
