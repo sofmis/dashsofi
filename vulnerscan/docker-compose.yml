@@ -3,7 +3,7 @@ services:
     build: {context: ., dockerfile: orchestrator/Dockerfile}
     ports: ["127.0.0.1:8000:8000"]
     env_file: .env
-    volumes: ["./checks:/checks"]
+    volumes: ["./checks:/checks", "./data:/data"]   # ./data: SQLite (historial persistente)
     depends_on: [network, web, custom, code, osaudit]
   network:
     build: {context: ./plugins, dockerfile: network/Dockerfile}

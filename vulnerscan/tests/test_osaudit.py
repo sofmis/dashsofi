@@ -16,7 +16,7 @@ os.environ.setdefault("ALLOWED_TARGETS", "10.0.0.0/24,example.com")
 sys.path[:0] = [f"{ROOT}/plugins", f"{ROOT}/plugins/osaudit", f"{ROOT}/orchestrator/app"]
 
 import scope, normalize, prioritize          # orquestador
-import distro, cvss, osv                      # ayudantes osaudit
+import distro, cvss, osv, winmatch            # ayudantes osaudit
 import app as oa                              # app FastAPI osaudit
 from fastapi import HTTPException
 
@@ -71,6 +71,24 @@ def test_eol():
     check("win no-hotfix flagged", any(x["rule_id"] == "win-no-hotfix" for x in wf2))
 
 
+def test_winmatch():
+    c = winmatch.software_to_cpe("Google Chrome", "118.0.5993.89", "Google LLC")
+    check("winmatch chrome cpe", c and c[0] == "cpe:2.3:a:google:chrome:118.0.5993.89:*:*:*:*:*:*:*")
+    check("winmatch 7zip", winmatch.software_to_cpe("7-Zip 22.01 (x64)", "22.01")[0].startswith("cpe:2.3:a:7-zip:7-zip:22.01"))
+    check("winmatch clean_version", winmatch.clean_version("v3.4.1-build7") == "3.4.1")
+    check("winmatch unknown none", winmatch.software_to_cpe("Acme Internal Tool", "1.0") is None)
+    # findings de software -> CPE sin CVE (los expande el orquestador)
+    data = {"os": {"BuildNumber": "19045"}, "hotfixes": [{"InstalledOn": "2026-11-01"}],
+            "software": [{"DisplayName": "Mozilla Firefox", "DisplayVersion": "118.0"},
+                         {"DisplayName": "Mozilla Firefox", "DisplayVersion": "118.0"},  # duplicado
+                         {"DisplayName": "Herramienta interna", "DisplayVersion": "2.0"}]}
+    oa._TODAY = datetime.date(2026, 11, 13)
+    wf = oa._windows_findings(data, "winrm://h")
+    sw = [f for f in wf if f["rule_id"].startswith("sw-")]
+    check("win software one cpe (dedupe)", len(sw) == 1 and sw[0]["cpe"].startswith("cpe:2.3:a:mozilla:firefox:118.0"))
+    check("win software no cve yet", sw[0]["cves"] == [] and sw[0]["confidence"] == 0.55)
+
+
 def _fake_osv():
     class R:
         def __init__(s, j): s._j = j; s.status_code = 200
@@ -109,7 +127,7 @@ def test_osv_and_pipeline():
 
 
 if __name__ == "__main__":
-    for fn in (test_cvss, test_scope, test_parse_target, test_eol, test_osv_and_pipeline):
+    for fn in (test_cvss, test_scope, test_parse_target, test_eol, test_winmatch, test_osv_and_pipeline):
         fn()
     print("\n" + ("ALL PASS" if not FAILS else f"FAILURES: {FAILS}"))
     sys.exit(1 if FAILS else 0)

@@ -14,6 +14,7 @@ from common import finding
 import collectors
 import distro
 import osv
+import winmatch
 
 app = FastAPI()
 HOST_RE = re.compile(r"^[A-Za-z0-9.\-_]{1,253}$")
@@ -51,7 +52,7 @@ def _eol_finding_linux(osrel, asset):
     return None
 
 
-def _windows_findings(data, asset):
+def _windows_findings(data, asset, cve_max=60):
     out = []
     os_info = data.get("os") or {}
     build = str(os_info.get("BuildNumber") or "")
@@ -75,6 +76,32 @@ def _windows_findings(data, asset):
                                f"Actualizaciones de Windows atrasadas (~{age} días)", "medium", asset,
                                evidence=f"Último hotfix instalado: {last}.",
                                remediation="Aplicar las actualizaciones pendientes de Windows Update.", confidence=0.7))
+    # Software de terceros -> CPE (el orquestador lo expande a CVE vía NVD).
+    out += _windows_software_cpe(data.get("software") or [], asset, cve_max)
+    return out
+
+
+def _windows_software_cpe(software, asset, cve_max):
+    """Emite findings con CPE (sin CVE) para software conocido; dedupe por producto+versión."""
+    out, seen = [], set()
+    for s in software:
+        if len(out) >= cve_max:
+            break
+        name = s.get("DisplayName")
+        ver = s.get("DisplayVersion")
+        hit = winmatch.software_to_cpe(name, ver, s.get("Publisher"))
+        if not hit:
+            continue
+        cpe, vendor, product = hit
+        if cpe in seen:
+            continue
+        seen.add(cpe)
+        out.append(finding(
+            "osaudit", f"sw-{product}-{winmatch.clean_version(ver) or 'x'}",
+            f"{name} {ver or ''}".strip(), "info", asset,
+            cpe=cpe, confidence=0.55, package=name, installed_version=ver or "",
+            evidence=f"{name} {ver or ''} ({vendor}:{product})".strip(),
+            remediation="Verificar versión real y aplicar las actualizaciones del fabricante."))
     return out
 
 
@@ -135,8 +162,8 @@ def scan(req: dict):
         meta.update({"os": os_info.get("Caption"), "build": os_info.get("BuildNumber"),
                      "hotfixes": len(data.get("hotfixes") or []),
                      "software": len(data.get("software") or [])})
-        meta["note"] = ("Windows: cotejo básico (EOL + postura de actualización). "
-                        "El cotejo de software por CVE requiere MSRC/NVD (siguiente iteración).")
-        findings += _windows_findings(data, asset)
+        meta["note"] = ("Windows: EOL + postura de actualización + cotejo CVE del software "
+                        "reconocido (vía CPE/NVD; define NVD_API_KEY para ir más rápido).")
+        findings += _windows_findings(data, asset, cve_max=int(o.get("win_cve_max") or 60))
 
     return {"findings": findings, "meta": meta}

@@ -8,11 +8,13 @@ from .enrich import enrich
 from .normalize import normalize
 from .prioritize import fix_first, prioritize
 from .scope import detect_type, in_scope
+from . import store
 
 API_KEY = os.environ["API_KEY"]
 app = FastAPI(title="vulnerscan", docs_url=None, redoc_url=None)
-JOBS: dict = {}          # producción: PostgreSQL + cola de trabajos
+JOBS: dict = {}          # caché en memoria del proceso; persistencia en SQLite (store)
 SEM = asyncio.Semaphore(2)
+store.init()
 
 def auth(x_api_key: str = Header(default="")):
     if not hmac.compare_digest(x_api_key.encode(), API_KEY.encode()):
@@ -39,6 +41,7 @@ async def create_scan(req: ScanRequest):
     JOBS[jid] = {"id": jid, "target": req.target, "type": ttype, "status": "queued", "progress": [],
                  "errors": [], "findings": [], "fix_first": [], "created": time.time()}
     for old in sorted(JOBS, key=lambda k: JOBS[k]["created"])[:-50]: JOBS.pop(old, None)
+    store.save(JOBS[jid])
     asyncio.create_task(run_job(jid, req, ttype))
     return {"id": jid}
 
@@ -47,6 +50,7 @@ async def run_job(jid, req, ttype):
     async with SEM:
         try:
             job["status"] = "running"
+            store.save(job)
             raw, errors = await run_plan(req.target, ttype, req.modules, req.options, job)
             job["errors"] = errors
             job["progress"].append("normalizando y enriqueciendo (NVD / KEV / EPSS)")
@@ -55,15 +59,18 @@ async def run_job(jid, req, ttype):
             job["status"] = "done"
         except Exception as e:
             job["status"], job["errors"] = "failed", job["errors"] + [str(e)]
+        finally:
+            store.save(job)
 
 @app.get("/api/scans", dependencies=[Depends(auth)])
 def list_scans():
-    return [{k: j[k] for k in ("id", "target", "type", "status", "created")} for j in JOBS.values()]
+    return store.list_summaries()
 
 @app.get("/api/scans/{jid}", dependencies=[Depends(auth)])
 def get_scan(jid: str):
-    if jid not in JOBS: raise HTTPException(404)
-    return JOBS[jid]
+    job = JOBS.get(jid) or store.get(jid)
+    if job is None: raise HTTPException(404)
+    return job
 
 class CheckIn(BaseModel):
     yaml: str

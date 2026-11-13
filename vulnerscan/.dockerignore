@@ -1,4 +1,5 @@
 .env
 proxy-logs
 workspace
+data
 **/__pycache__

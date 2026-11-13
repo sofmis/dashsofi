@@ -29,17 +29,24 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
   `known_host_key` (fijación opcional de la clave de host), `use_ssl`/`transport` (WinRM). También desde la UI.
 - Comandos ejecutados: solo lectura (`os-release`, `dpkg-query`/`rpm -qa`/DB de apk; en Windows `Get-CimInstance`,
   `Get-HotFix`, claves de desinstalación). Sin sudo ni escritura.
-- Windows (básico): detección de build EOL + antigüedad de actualizaciones + inventario. El cotejo de software de
-  terceros por CVE (MSRC/NVD) queda para la siguiente iteración.
-- `NVD_API_KEY` no es necesaria para este módulo (OSV no tiene límite estricto), pero sí conviene para el resto.
+- Windows: detección de build EOL + antigüedad de actualizaciones + inventario, **y cotejo CVE del software
+  reconocido** (Chrome, Firefox, 7-Zip, OpenSSL, etc.) generando un CPE que el orquestador expande a CVE vía NVD.
+  El mapa fabricante/producto es conservador (`winmatch.py`) para no inventar CVE de nombres ambiguos.
+- `NVD_API_KEY` no es necesaria para el cotejo OSV (Linux), pero sí acelera el cotejo CPE→CVE de Windows y del resto.
+
+## Persistencia e interfaz
+- Los escaneos se guardan en **SQLite** (`./data/vulnerscan.db`, volumen) y sobreviven a reinicios; `MAX_SCANS`
+  limita el historial (500 por defecto). Para gran escala: PostgreSQL + cola.
+- La interfaz incluye resumen con anillo de riesgo y barra de severidad, filtros/búsqueda, **comparación entre
+  dos escaneos** (nuevas/resueltas), detalle expandible, historial e **informe descargable** (HTML imprimible a PDF).
 
 ## Checks personalizados (alternativa segura a NASL)
 YAML en `./checks` o desde la UI (`POST /api/checks`). Solo GET/HEAD/OPTIONS o TCP + matchers. Ver `checks/`.
 
 ## Límites conocidos
-- Jobs en memoria; producción: PostgreSQL + cola (Celery/Arq) + RBAC por usuario.
+- Escaneos persistidos en SQLite (ver arriba); para producción a escala: PostgreSQL + cola (Celery/Arq) + RBAC por usuario.
 - Los CVE por versión (NVD/CPE) quedan como "potencial" (confianza 0.55) por backports de las distribuciones; los hallazgos
   verificados activamente (checks, fuzzing) o corroborados por varios plugins suben a "confirmado". Así se reducen falsos positivos.
-- Auditoría de SO autenticada: implementada vía OSV.dev (módulo `osaudit`). Pendiente: evaluación OVAL/USN/DSA offline
-  (sin dependencia de OSV) y cotejo por CVE del software de terceros en Windows (MSRC).
+- Auditoría de SO autenticada: implementada vía OSV.dev (módulo `osaudit`); Windows cotejado por CPE/NVD. Pendiente:
+  evaluación OVAL/USN/DSA offline (sin dependencia de OSV) y fuente MSRC nativa para Windows (más precisa que CPE).
 - NVD sin API key tiene límite estricto (5 req/30 s): define NVD_API_KEY.

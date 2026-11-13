@@ -110,6 +110,20 @@ tr.drow>td{background:var(--bg2);border-bottom:2px solid var(--br)}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap}
 .grid2{display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start}
 @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+/* barra de severidad */
+.bar{display:flex;height:14px;border-radius:7px;overflow:hidden;margin-top:14px;border:1px solid var(--br)}
+.bar i{display:block;height:100%}
+.bar i[data-k=P0]{background:var(--p0)}.bar i[data-k=P1]{background:var(--p1)}.bar i[data-k=P2]{background:var(--p2)}
+.bar i[data-k=P3]{background:var(--p3)}.bar i[data-k=P4]{background:var(--p4)}
+.barleg{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--mut)}
+.barleg span{display:inline-flex;align-items:center;gap:5px}
+.barleg b{width:9px;height:9px;border-radius:2px;display:inline-block}
+/* comparar */
+#cmpRow{align-items:center}
+.sig.new{background:var(--ac);color:#fff;border-color:var(--ac2)}
+.sig.res{color:var(--ok);border-color:var(--ok)}
+tr.frow.res .ttl{text-decoration:line-through;opacity:.7}
+tr.frow.res td{opacity:.75}
 </style></head><body>
 <div class="wrap">
 <header>
@@ -171,6 +185,8 @@ tr.drow>td{background:var(--bg2);border-bottom:2px solid var(--br)}
         </svg><div class="lbl"><b id="riskNum">0</b><span id="riskLbl">riesgo</span></div></div>
         <div>
           <div class="tiles" id="tiles"></div>
+          <div class="bar" id="sevbar"></div>
+          <div class="barleg" id="sevleg"></div>
           <div class="metaline" id="metaline"></div>
         </div>
       </div>
@@ -188,9 +204,20 @@ tr.drow>td{background:var(--bg2);border-bottom:2px solid var(--br)}
         <select id="fplugin"><option value="">Todos los plugins</option></select>
         <select id="fasset"><option value="">Todos los activos</option></select>
         <div class="toolbar">
+          <button class="ghost pill" id="expReport">Informe</button>
           <button class="ghost pill" id="expJson">Exportar JSON</button>
           <button class="ghost pill" id="expCsv">Exportar CSV</button>
         </div>
+      </div>
+      <div class="controls" id="cmpRow">
+        <label class="hint" for="fcompare" style="margin:0">Comparar con</label>
+        <select id="fcompare"><option value="">— ninguno —</option></select>
+        <div class="toolbar" id="cmpSeg" hidden>
+          <button class="ghost pill" data-cf="all" aria-pressed="true">Todas</button>
+          <button class="ghost pill" data-cf="new">Solo nuevas</button>
+          <button class="ghost pill" data-cf="res">Solo resueltas</button>
+        </div>
+        <span class="hint" id="cmpMsg"></span>
       </div>
       <div class="controls" id="prioPills"></div>
       <table id="tbl"><thead><tr>
@@ -218,6 +245,8 @@ const el=(t,txt,cls)=>{const e=document.createElement(t);if(txt!=null)e.textCont
 const esc=s=>String(s==null?"":s);
 const KEY_LS="vulnerscan_key", THEME_LS="vulnerscan_theme";
 let JOB=null, FILT={q:"",plugin:"",asset:"",prios:new Set()}, SORT={col:"priority_score",dir:-1};
+let HISTORY=[], CMP=null, CMPKEYS=null, CMPFILT="all";
+const keyOf=f=>f.rule_id+"|"+f.asset;
 
 /* ---- API key + tema persistentes (localStorage, tolerante a fallos) ---- */
 try{const k=localStorage.getItem(KEY_LS);if(k)$("key").value=k}catch(e){}
@@ -273,6 +302,7 @@ async function loadHistory(){
   let list;try{list=await (await fetch("/api/scans",{headers:H()})).json()}catch(e){return}
   if(!Array.isArray(list))return;
   list.sort((a,b)=>b.created-a.created);
+  HISTORY=list;populateCompare();
   const h=$("hist");h.replaceChildren();
   if(!list.length){h.append(el("span","Sin escaneos previos.","hint"));return}
   for(const s of list.slice(0,40)){
@@ -287,6 +317,26 @@ async function loadHistory(){
     h.append(b);
   }
 }
+
+/* ------------------------------ comparar ------------------------------- */
+function populateCompare(){const sel=$("fcompare");const cur=sel.value;
+  sel.replaceChildren(el("option","— ninguno —"));sel.firstChild.value="";
+  HISTORY.filter(s=>(!JOB||s.id!==JOB.id)&&s.status==="done").forEach(s=>{
+    const o=el("option",s.target+" · "+new Date(s.created*1000).toLocaleString());o.value=s.id;sel.append(o)});
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur}
+$("fcompare").addEventListener("change",async e=>{const id=e.target.value;
+  if(!id){CMP=null;CMPKEYS=null;$("cmpSeg").hidden=true;$("cmpMsg").textContent="";applyFilters();return}
+  $("cmpMsg").textContent="Cargando…";
+  let j;try{j=await (await fetch("/api/scans/"+id,{headers:H()})).json()}catch(err){$("cmpMsg").textContent="Error de red";return}
+  CMP=j;CMPKEYS=new Set((j.findings||[]).map(keyOf));CMPFILT="all";
+  $("cmpSeg").hidden=false;$("cmpSeg").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.cf==="all"));
+  updateCmpMsg();applyFilters()});
+$("cmpSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{CMPFILT=b.dataset.cf;
+  $("cmpSeg").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));applyFilters()});
+function updateCmpMsg(){if(!CMP){$("cmpMsg").textContent="";return}
+  const curK=new Set(((JOB&&JOB.findings)||[]).map(keyOf));let nw=0,res=0,same=0;
+  curK.forEach(k=>CMPKEYS.has(k)?same++:nw++);CMPKEYS.forEach(k=>{if(!curK.has(k))res++});
+  $("cmpMsg").textContent=`vs ${CMP.target}: ${nw} nuevas · ${res} resueltas · ${same} sin cambios`}
 
 /* ------------------------------ render job ----------------------------- */
 function renderJob(j){
@@ -303,6 +353,8 @@ function renderJob(j){
   const assets=[...new Set(F.map(f=>f.asset).filter(Boolean))].sort();
   fillSelect($("fasset"),"Todos los activos",assets);
   renderPrioPills(F);
+  CMP=null;CMPKEYS=null;$("fcompare").value="";$("cmpSeg").hidden=true;$("cmpMsg").textContent="";
+  populateCompare();
   FILT.prios.clear();applyFilters();
 }
 function fillSelect(sel,allLabel,vals){const cur=sel.value;sel.replaceChildren(el("option",allLabel));
@@ -325,6 +377,7 @@ function renderSummary(j){
   const col=counts.P0?"--p0":counts.P1?"--p1":counts.P2?"--p2":F.length?"--ok":"--mut";
   $("ringArc").style.stroke="var("+col+")";
   $("riskNum").textContent=pct;$("riskLbl").textContent=riskWord(counts);
+  renderSevBar(counts,F.length);
   const assets=new Set(F.map(f=>f.asset)).size;
   const confirmed=F.filter(f=>(f.confidence||0)>=0.8).length;
   const ml=$("metaline");ml.replaceChildren();
@@ -340,6 +393,12 @@ function renderSummary(j){
     if(parts.length){ml.append(document.createElement("br"));ml.append(el("span","Inventario — "+parts.join(" · ")))}
   }
 }
+function renderSevBar(counts,total){const bar=$("sevbar"),leg=$("sevleg");bar.replaceChildren();leg.replaceChildren();
+  bar.style.display=leg.style.display=total?"":"none";if(!total)return;
+  PR.forEach(p=>{if(!counts[p])return;const i=el("i");i.dataset.k=p;i.style.width=(100*counts[p]/total)+"%";
+    i.title=p+": "+counts[p];bar.append(i)});
+  PR.forEach(p=>{if(!counts[p])return;const s=el("span");const b=el("b");b.style.background="var(--"+p.toLowerCase()+")";
+    s.append(b,el("span",p+" "+counts[p]));leg.append(s)})}
 function prioName(p){return {P0:"crítico",P1:"probable",P2:"alto",P3:"medio/bajo",P4:"info"}[p]}
 function riskWord(c){return c.P0?"crítico":c.P1?"alto":c.P2?"elevado":(c.P3||c.P4)?"bajo":"limpio"}
 
@@ -361,8 +420,19 @@ document.querySelectorAll("#tbl thead th").forEach(th=>th.onclick=()=>{
   document.querySelectorAll("#tbl thead th .ar").forEach(a=>a.remove());
   th.append(el("span",SORT.dir<0?"▾":"▴","ar"));applyFilters()});
 
+function workingFindings(){
+  let cur=((JOB&&JOB.findings)||[]).map(f=>Object.assign({},f,{_state:CMPKEYS?(CMPKEYS.has(keyOf(f))?"igual":"nuevo"):""}));
+  if(CMP){
+    const curKeys=new Set(((JOB&&JOB.findings)||[]).map(keyOf));
+    const resolved=(CMP.findings||[]).filter(f=>!curKeys.has(keyOf(f))).map(f=>Object.assign({},f,{_state:"resuelto"}));
+    cur=cur.concat(resolved);
+    if(CMPFILT==="new")cur=cur.filter(f=>f._state==="nuevo");
+    else if(CMPFILT==="res")cur=cur.filter(f=>f._state==="resuelto");
+  }
+  return cur;
+}
 function visibleFindings(){
-  let F=(JOB&&JOB.findings)||[];
+  let F=workingFindings();
   if(FILT.prios.size)F=F.filter(f=>FILT.prios.has(f.priority));
   if(FILT.plugin)F=F.filter(f=>(f.sources||[f.plugin]).includes(FILT.plugin));
   if(FILT.asset)F=F.filter(f=>f.asset===FILT.asset);
@@ -383,7 +453,7 @@ let OPEN=new Set();
 function renderTable(F){const tb=$("tb");tb.replaceChildren();
   F.forEach((f,i)=>{
     const id=f.rule_id+"|"+f.asset;
-    const tr=el("tr",null,"frow");
+    const tr=el("tr",null,"frow"+(f._state==="resuelto"?" res":""));
     const tdP=el("td");tdP.append(el("span",f.priority,"tag "+f.priority));tr.append(tdP);
     const tdT=el("td");tdT.append(el("div",f.title,"ttl"));
     if(f.remediation)tdT.append(el("small",f.remediation));tr.append(tdT);
@@ -394,6 +464,8 @@ function renderTable(F){const tb=$("tb");tb.replaceChildren();
     if(OPEN.has(id))drawDetail(tr,f,id);
   })}
 function sigTags(f){const out=[];
+  if(f._state==="nuevo")out.push(el("span","NUEVO","sig new"));
+  if(f._state==="resuelto")out.push(el("span","RESUELTO","sig res"));
   if(f.kev)out.push(el("span","KEV","sig kev"));
   if(f.epss)out.push(el("span","EPSS "+(f.epss*100).toFixed(1)+"%","sig epss"));
   if(f.cvss!=null)out.push(el("span","CVSS "+f.cvss,"sig cvss"));
@@ -434,6 +506,52 @@ $("expCsv").onclick=()=>{const F=visibleFindings();if(!F.length)return;
   const q=v=>'"'+String(v==null?"":Array.isArray(v)?v.join(" "):v).replace(/"/g,'""')+'"';
   const rows=[cols.join(",")].concat(F.map(f=>cols.map(c=>q(f[c])).join(",")));
   download(`vulnerscan-${(JOB&&JOB.id)||"scan"}.csv`,"text/csv",rows.join("\n"))};
+
+/* ------------------------- informe HTML/PDF ---------------------------- */
+function reportHTML(){
+  const j=JOB;if(!j)return"";
+  const F=(j.findings||[]).slice().sort((a,b)=>(b.priority_score||0)-(a.priority_score||0));
+  const H=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const counts={P0:0,P1:0,P2:0,P3:0,P4:0};F.forEach(f=>{if(counts[f.priority]!=null)counts[f.priority]++});
+  const C={P0:"#cf222e",P1:"#bc4c00",P2:"#9a6700",P3:"#57606a",P4:"#8c959f"};
+  const tiles=PR.map(p=>`<div class="t"><b style="color:${C[p]}">${counts[p]}</b><span>${p} · ${prioName(p)}</span></div>`).join("");
+  const ff=(j.fix_first||[]).map(f=>`<li><b>${H(f.title)}</b> — ${H(f.reason||"")}</li>`).join("")||"<li>—</li>";
+  const rows=F.map(f=>{const sig=[f.kev?"KEV":"",f.epss?`EPSS ${(f.epss*100).toFixed(1)}%`:"",f.cvss!=null?`CVSS ${f.cvss}`:"",(f.confidence>=0.8?"confirmado":"potencial")].filter(Boolean).join(" · ");
+    return `<tr><td><span class="pz" style="background:${C[f.priority]}">${f.priority}</span></td>
+      <td><b>${H(f.title)}</b>${(f.cves||[]).length?`<div class="cv">${f.cves.map(H).join(", ")}</div>`:""}
+      ${f.remediation?`<div class="rm">↳ ${H(f.remediation)}</div>`:""}</td>
+      <td class="mono">${H(f.asset)}</td><td class="sg">${H(sig)}</td></tr>`}).join("");
+  const m=j.meta||{};const inv=m.os?`<p class="inv">Inventario — ${H(m.os)}${m.packages!=null?` · ${m.packages} paquetes`:""}${m.ecosystem?` · ${H(m.ecosystem)}`:""}${m.build?` · build ${H(m.build)}`:""}</p>`:"";
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe vulnerscan — ${H(j.target)}</title>
+<style>
+@page{margin:16mm}
+*{box-sizing:border-box}body{font:13px/1.5 system-ui,Segoe UI,Roboto,sans-serif;color:#1f2328;margin:0;padding:24px;max-width:900px}
+h1{font-size:22px;margin:0 0 2px}.meta{color:#59636e;font-size:12px;margin:0 0 16px}
+.tiles{display:flex;gap:8px;margin:12px 0}.t{flex:1;border:1px solid #d0d7de;border-radius:8px;padding:8px 10px}
+.t b{font-size:20px;display:block}.t span{font-size:10px;color:#59636e}
+h2{font-size:14px;margin:20px 0 6px;border-bottom:1px solid #d0d7de;padding-bottom:4px}
+ol{margin:6px 0;padding-left:20px}ol li{margin:3px 0}
+table{width:100%;border-collapse:collapse;margin-top:6px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e1e4e8;vertical-align:top;font-size:12px}
+th{font-size:10px;text-transform:uppercase;color:#59636e}
+.pz{display:inline-block;color:#fff;font-weight:700;border-radius:4px;padding:1px 7px;font-size:11px}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#59636e;word-break:break-all}
+.cv{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#0969da;margin-top:2px}
+.rm{color:#1a7f37;font-size:11px;margin-top:2px}.sg{font-size:11px;color:#59636e}.inv{font-size:11px;color:#59636e}
+tr{break-inside:avoid}
+footer{margin-top:22px;color:#8c959f;font-size:11px;border-top:1px solid #d0d7de;padding-top:8px}
+</style></head><body>
+<h1>Informe de vulnerabilidades</h1>
+<p class="meta">Objetivo <b>${H(j.target)}</b> · tipo ${H(j.type||"")} · ${F.length} hallazgos · generado ${new Date().toLocaleString()}</p>
+<div class="tiles">${tiles}</div>${inv}
+<h2>Repara esto primero</h2><ol>${ff}</ol>
+<h2>Todos los hallazgos</h2>
+<table><thead><tr><th>Prio</th><th>Hallazgo</th><th>Activo</th><th>Señales</th></tr></thead><tbody>${rows}</tbody></table>
+<footer>vulnerscan · Prioridad por explotación activa (KEV), probabilidad (EPSS) y severidad (CVSS). Consejo: abre este archivo e imprime a PDF (Cmd/Ctrl+P).</footer>
+</body></html>`;
+}
+$("expReport").onclick=()=>{const h=reportHTML();if(!h)return;
+  download(`informe-vulnerscan-${(JOB&&JOB.id)||"scan"}.html`,"text/html;charset=utf-8",h)};
 
 loadHistory();
 </script></body></html>
