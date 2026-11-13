@@ -90,14 +90,21 @@ details.sub>summary::marker{color:var(--mut)}
 .ring .lbl{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 .ring .lbl b{font-size:26px;font-family:var(--mono);font-weight:700}.ring .lbl span{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.1em;font-family:var(--mono)}
 .tiles{display:flex;gap:10px;flex-wrap:wrap}
-.tile{flex:1;min-width:86px;border:1px solid var(--br);border-radius:10px;padding:10px 12px;background:var(--card2)}
-.tile b{font-size:24px;display:block;line-height:1.05;font-family:var(--mono);font-weight:700}
-.tile span{font-size:10.5px;color:var(--mut);font-family:var(--mono);letter-spacing:.02em}
+.tile{flex:1 1 94px;min-width:94px;border:1px solid var(--br);border-radius:11px;padding:11px 13px;background:var(--card2);display:flex;flex-direction:column;gap:5px;min-height:64px;justify-content:center}
+.tile b{font-size:25px;line-height:1;font-family:var(--mono);font-weight:700}
+.tile span{font-size:10px;color:var(--mut);font-family:var(--mono);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile.sel{outline:2px solid var(--ac);outline-offset:-1px}
 .tile[data-k=P0] b{color:var(--p0)}.tile[data-k=P1] b{color:var(--p1)}.tile[data-k=P2] b{color:var(--p2)}
 .tile[data-k=P3] b{color:var(--fg)}.tile[data-k=P4] b{color:var(--mut)}
-.metaline{color:var(--mut);font-size:12.5px;margin-top:12px;border-top:1px solid var(--br);padding-top:10px}
-.metaline b{color:var(--fg);font-weight:600}
+.metaline{margin-top:14px;border-top:1px solid var(--br);padding-top:13px}
+.sumstats{display:flex;flex-wrap:wrap;gap:10px}
+.sumstats .st{display:flex;flex-direction:column;gap:2px;padding:8px 13px;border:1px solid var(--br);border-radius:10px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--card2) 80%,#fff 4%),var(--card2));
+  box-shadow:0 1px 0 color-mix(in srgb,#fff 6%,transparent) inset,0 6px 14px -10px rgba(0,0,0,.5)}
+.sumstats .st b{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--fg);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.sumstats .st span{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--mut)}
+.inv-meta{margin-top:11px;font-family:var(--mono);font-size:11.5px;color:var(--mut);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;line-height:1.6}
+.inv-meta .lbl{color:var(--ac);font-weight:700;letter-spacing:.07em;text-transform:uppercase;font-size:9.5px;border:1px solid color-mix(in srgb,var(--ac) 40%,transparent);border-radius:5px;padding:2px 6px;background:color-mix(in srgb,var(--ac) 10%,transparent)}
 /* fix first */
 .ff li{margin:4px 0}
 .ff .n{display:inline-block;min-width:20px;color:var(--mut)}
@@ -247,8 +254,7 @@ details.sub{border-radius:10px}
   <div class="brand">
     <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
     <div>
-      <div class="name">vulnerscan <span class="tag">v0.2</span></div>
-      <div class="sub">Escáner de vulnerabilidades · red · web · código · SO autenticado</div>
+      <div class="name">vulnerscan</div>
     </div>
   </div>
   <span class="spacer"></span>
@@ -293,7 +299,7 @@ details.sub{border-radius:10px}
   </details>
 </div>
 
-<div class="card"><div class="statusbar" id="status"><span class="dot"></span><span>Listo. Introduce un objetivo y pulsa Escanear.</span></div>
+<div class="card" id="statusCard" hidden><div class="statusbar" id="status"><span class="dot"></span><span>Listo.</span></div>
 <div id="progwrap" hidden><div class="prbar" id="prbar"><i></i></div><ul class="prlog" id="prlog"></ul></div></div>
 
 <div class="grid2">
@@ -367,7 +373,7 @@ details.sub{border-radius:10px}
   </div>
 </div>
 <footer class="foot">
-  <span class="lg"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> <b>vulnerscan</b> v0.2</span>
+  <span class="lg"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> <b>vulnerscan</b></span>
   <span>Riesgo = <b>KEV</b> (explotación activa) › <b>EPSS</b> (probabilidad) › <b>CVSS</b> (severidad), ponderado por confianza del hallazgo.</span>
   <span class="spacer"></span>
   <span>P0 crítico · P1 probable · P2 alto · P3 medio/bajo · P4 info</span>
@@ -399,7 +405,8 @@ $("themeBtn").onclick=()=>{const cur=document.documentElement.getAttribute("data
 
 const H=()=>({"Content-Type":"application/json","X-API-Key":$("key").value});
 function setStatus(cls,txt,busy){const s=$("status");s.replaceChildren();
-  s.append(busy?el("span","","spin"):el("span","","dot "+(cls||"")));s.append(el("span",txt))}
+  s.append(busy?el("span","","spin"):el("span","","dot "+(cls||"")));s.append(el("span",txt));
+  const card=$("statusCard");if(card)card.hidden=(cls==="done");}
 
 /* --------------------------- lanzar escaneos --------------------------- */
 async function startScan(body,msgEl){
@@ -530,16 +537,17 @@ function renderSummary(j){
   const assets=new Set(F.map(f=>f.asset)).size;
   const confirmed=F.filter(f=>(f.confidence||0)>=0.8).length;
   const ml=$("metaline");ml.replaceChildren();
-  ml.append(el("b",F.length+""));ml.append(document.createTextNode(" hallazgos · "));
-  ml.append(el("b",assets+""));ml.append(document.createTextNode(" activos · "));
-  ml.append(el("b",confirmed+""));ml.append(document.createTextNode(" confirmados · objetivo "));
-  ml.append(el("b",j.target||"—"));
+  const stats=el("div",null,"sumstats");
+  const stat=(n,l)=>{const d=el("div",null,"st");d.append(el("b",String(n)),el("span",l));return d};
+  stats.append(stat(F.length,"hallazgos"),stat(assets,"activos"),stat(confirmed,"confirmados"),stat(j.target||"—","objetivo"));
+  ml.append(stats);
   if(j.meta&&Object.keys(j.meta).length){
-    const parts=[];const m=j.meta;
-    if(m.os)parts.push("SO: "+m.os);if(m.packages!=null)parts.push(m.packages+" paquetes");
-    if(m.ecosystem)parts.push("ecosistema "+m.ecosystem);if(m.build)parts.push("build "+m.build);
-    if(m.hotfixes!=null)parts.push(m.hotfixes+" hotfixes");if(m.note)parts.push(m.note);
-    if(parts.length){ml.append(document.createElement("br"));ml.append(el("span","Inventario — "+parts.join(" · ")))}
+    const m=j.meta,parts=[];
+    if(m.os)parts.push(m.os);if(m.packages!=null)parts.push(m.packages+" paquetes");
+    if(m.ecosystem)parts.push(m.ecosystem);if(m.build)parts.push("build "+m.build);
+    if(m.hotfixes!=null)parts.push(m.hotfixes+" hotfixes");
+    if(parts.length){const im=el("div",null,"inv-meta");im.append(el("span","Inventario","lbl"),el("span",parts.join(" · ")));ml.append(im)}
+    if(m.note){const nn=el("div",null,"inv-meta");nn.style.opacity=".8";nn.append(el("span",m.note));ml.append(nn)}
   }
 }
 function renderSevBar(counts,total){const bar=$("sevbar"),leg=$("sevleg");bar.replaceChildren();leg.replaceChildren();
@@ -569,7 +577,7 @@ function drawInventory(q){
   $("invMore").textContent=rows.length>600?`Mostrando 600 de ${rows.length}. Afina la búsqueda.`:(q?`${rows.length} coincidencias.`:"");
 }
 $("invq").addEventListener("input",e=>drawInventory(e.target.value));
-function prioName(p){return {P0:"crítico",P1:"probable",P2:"alto",P3:"medio/bajo",P4:"info"}[p]}
+function prioName(p){return {P0:"crítico",P1:"probable",P2:"alto",P3:"medio",P4:"info"}[p]}
 function riskWord(c){return c.P0?"crítico":c.P1?"alto":c.P2?"elevado":(c.P3||c.P4)?"bajo":"limpio"}
 
 function renderPrioPills(F){const box=$("prioPills");box.replaceChildren();
