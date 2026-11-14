@@ -22,5 +22,6 @@ services:
   proxy:                            # docker compose --profile proxy up proxy
     profiles: ["proxy"]
     build: {context: ./plugins/proxy}
+    env_file: .env                  # ALLOWED_TARGETS: las reglas solo actúan sobre estos hosts
     ports: ["127.0.0.1:8081:8081", "127.0.0.1:8082:8080"]
     volumes: ["./plugins/proxy/rules.json:/rules/rules.json:ro", "./proxy-logs:/logs"]

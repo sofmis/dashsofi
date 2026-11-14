@@ -72,6 +72,18 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
 - Si una herramienta falla, falta o devuelve una salida ilegible, el escaneo lo reporta como **error**;
   nunca devuelve "sin hallazgos" en silencio. Las pruebas: `python tests/test_code_plugin.py`.
 
+## Fuzzing y proxy de interceptación (solo objetivos autorizados)
+- **Fuzzing de detección** (`plugins/web/fuzz.py`): prueba parámetros de las páginas y formularios GET.
+  Prioriza por nombre (id, file, q, url…), confirma cada hallazgo con una segunda sonda y deja de probar un
+  parámetro solo en su propia clase. Detecta: XSS reflejado, SQLi por error, SQLi ciega (booleana con condiciones
+  de solo lectura), traversal (con control de archivo inexistente), plantillas, open redirect y 500 reproducible.
+  Los POST solo con `fuzz_post=true`. Prueba: `python tests/test_fuzz.py` (app vulnerable y app segura de prueba).
+- **Proxy** (`plugins/proxy`, opcional con `--profile proxy`): mitmweb permite pausar y editar peticiones a mano.
+  `rules.json` aplica reglas: cambiar o quitar cabeceras, cambiar parámetros, reemplazar cuerpo o **bloquear**
+  el tráfico (403). Una regla solo actúa sobre hosts de `ALLOWED_TARGETS`; las que apuntan a otro host, o con
+  claves desconocidas, se descartan y se anota el motivo.
+  Pruebas: `python tests/test_proxy_rules.py` y `python tests/test_proxy_addon.py` (con mitmproxy).
+
 ## Checks personalizados (alternativa segura a NASL)
 YAML en `./checks` o desde la UI (`POST /api/checks`). Solo GET/HEAD/OPTIONS o TCP + matchers. Ver `checks/`.
 
