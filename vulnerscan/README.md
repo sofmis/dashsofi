@@ -43,6 +43,14 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
   escaneo, filtros/búsqueda, **comparación entre dos escaneos** (nuevas/resueltas), detalle expandible, historial,
   **visor de inventario** (paquetes/software del escaneo autenticado) e **informe descargable** (HTML imprimible a PDF).
 
+## Código e imágenes (SAST, secretos, dependencias, capas)
+- `image:<ref>`: Trivy analiza la imagen **capa por capa**. Cada vulnerabilidad indica en qué capa aparece
+  (`capa 2/3`) y la instrucción del Dockerfile que la creó (p. ej. `RUN apt-get install …`).
+- Repos (`https://…` o `/workspace/<dir>`): Semgrep (SAST con AST), detect-secrets (secretos, sin guardar el valor)
+  y Trivy sobre lockfiles/requirements (dependencias obsoletas **antes de compilar**) y Dockerfiles.
+- Si una herramienta falla, falta o devuelve una salida ilegible, el escaneo lo reporta como **error**;
+  nunca devuelve "sin hallazgos" en silencio. Las pruebas: `python tests/test_code_plugin.py`.
+
 ## Checks personalizados (alternativa segura a NASL)
 YAML en `./checks` o desde la UI (`POST /api/checks`). Solo GET/HEAD/OPTIONS o TCP + matchers. Ver `checks/`.
 

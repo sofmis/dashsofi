@@ -11,7 +11,11 @@ async def run_plan(target, ttype, modules, options, job):
             job["progress"].append(f"{mod} → {tgt}")
             try:
                 r = await c.post(f"{URLS[mod]}/scan", json={"target": tgt, "options": {**options, "type": t}})
-                r.raise_for_status(); res = r.json()
+                if r.status_code >= 400:   # mostrar el motivo real del plugin, no solo el código HTTP
+                    try: det = r.json().get("detail", r.text[:200])
+                    except Exception: det = r.text[:200]
+                    raise RuntimeError(f"HTTP {r.status_code}: {det}")
+                res = r.json()
             except Exception as e:
                 errors.append(f"{mod}: {e}"); return {"findings": [], "meta": {}}
             raw.extend(res.get("findings", []))
