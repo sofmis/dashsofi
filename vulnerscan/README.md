@@ -54,6 +54,16 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
   **sin detecciones** o **sin datos**. "Sin detecciones" no garantiza que el sitio sea seguro.
 - Pruebas: `python tests/test_reputation.py` (incluye la comprobación de que el sitio analizado no recibe visitas).
 
+## Aplicaciones web modernas (SPA: React, Angular, APIs)
+- Chromium ejecuta el JavaScript de la página como un usuario y **recorre las rutas del mismo origen**
+  (`max_routes`, por defecto 30), descubriendo enlaces generados por el JS, título y estado por ruta.
+- Endpoints `GET` que la página llama (XHR/fetch) se comprueban: si devuelven datos JSON sin autenticación se
+  reporta "Endpoint de API accesible sin autenticación" (severidad baja, para revisión humana).
+- Reglas: **solo GET y mismo origen**. Cualquier POST/PUT/DELETE o petición a terceros se bloquea y se registra
+  por host (nunca se envían formularios ni se pulsan botones).
+- Limitación: rutas que solo aparecen tras pulsar botones o con `history.pushState` sin enlace no se descubren.
+- Prueba: `CHROMIUM_PATH=… python tests/test_web_render.py` (usa una SPA local de prueba).
+
 ## Código e imágenes (SAST, secretos, dependencias, capas)
 - `image:<ref>`: Trivy analiza la imagen **capa por capa**. Cada vulnerabilidad indica en qué capa aparece
   (`capa 2/3`) y la instrucción del Dockerfile que la creó (p. ej. `RUN apt-get install …`).
