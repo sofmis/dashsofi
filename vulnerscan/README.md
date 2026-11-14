@@ -43,6 +43,17 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
   escaneo, filtros/búsqueda, **comparación entre dos escaneos** (nuevas/resueltas), detalle expandible, historial,
   **visor de inventario** (paquetes/software del escaneo autenticado) e **informe descargable** (HTML imprimible a PDF).
 
+## ¿Es maligna esta URL? (reputación, análisis pasivo)
+- Acepta **cualquier URL** (con o sin `https://`). El sitio **no se visita**: solo se consultan reputaciones.
+- Fuentes: **VirusTotal** (solo informes ya existentes; nunca se envía la URL para analizar, porque eso haría
+  que VirusTotal visite el sitio) y **Google Safe Browsing**. Además, señales de la propia URL (IP como host,
+  punycode, `@`, subdominios, extensiones de alto abuso).
+- Requiere `VT_API_KEY` y `GSB_API_KEY` en `.env`. Sin claves, la fuente aparece como "sin clave"; nunca se
+  inventa un veredicto. Endpoint: `GET /api/reputation?url=…` (con la API key).
+- Veredicto: **maligna** (Safe Browsing o 3+ motores), **sospechosa** (1–2 motores o varias señales),
+  **sin detecciones** o **sin datos**. "Sin detecciones" no garantiza que el sitio sea seguro.
+- Pruebas: `python tests/test_reputation.py` (incluye la comprobación de que el sitio analizado no recibe visitas).
+
 ## Código e imágenes (SAST, secretos, dependencias, capas)
 - `image:<ref>`: Trivy analiza la imagen **capa por capa**. Cada vulnerabilidad indica en qué capa aparece
   (`capa 2/3`) y la instrucción del Dockerfile que la creó (p. ej. `RUN apt-get install …`).

@@ -267,6 +267,9 @@ details.sub>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--fg
 details.sub>summary::-webkit-details-marker{display:none}
 details.sub>summary::before{content:"";width:0;height:0;border-left:6px solid var(--ac);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
 details.sub[open]>summary::before{transform:rotate(90deg)}
+.verdict-row{display:flex;align-items:center;gap:12px;margin:16px 0 6px;flex-wrap:wrap}
+.verdict{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.08em;padding:7px 14px;border-radius:9px;box-shadow:0 8px 18px -12px var(--shadow)}
+.repwrap{margin-top:12px;overflow:auto;border-radius:var(--radius-sm)}
 /* ===== responsive ===== */
 @media(max-width:1100px){.shell{grid-template-columns:200px minmax(0,1fr)}.inspector{grid-column:1/-1;position:static;height:auto;border-left:0;border-top:1px solid var(--br)}}
 @media(max-width:820px){
@@ -303,6 +306,7 @@ details.sub[open]>summary::before{transform:rotate(90deg)}
   <button class="navb" data-sec="fix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.3 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.3a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg> Repara esto primero</button>
   <button class="navb" data-sec="inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg> Inventario <span class="nb" id="nbInv"></span></button>
   <button class="navb" data-sec="find"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg> Hallazgos <span class="nb" id="nbFind"></span></button>
+  <button class="navb" data-sec="rep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4M12 16h.01"/></svg> ¿Es maligna?</button>
   <button class="navb" data-sec="hist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Historial</button>
 </nav>
 <main class="content" id="content">
@@ -409,6 +413,15 @@ details.sub[open]>summary::before{transform:rotate(90deg)}
       <div class="empty" id="noRows" hidden>Ningún hallazgo coincide con los filtros.</div>
     </div>
 </section>
+<section class="sec" id="sec-rep" hidden>
+    <div class="card">
+      <h3><svg class="ic" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4M12 16h.01"/></svg> ¿Es maligna esta URL?</h3>
+      <p class="hint">Escribe cualquier URL. Se consulta su reputación en VirusTotal y Google Safe Browsing <b>sin visitar el sitio</b>.</p>
+      <div class="row" style="margin-top:10px"><input id="repUrl" class="grow" type="text" placeholder="https://ejemplo.com/ruta o ejemplo.com" autocomplete="off"><button id="repGo">Analizar</button></div>
+      <div class="errbox" id="repErr" hidden></div>
+      <div id="repOut"></div>
+    </div>
+</section>
 <section class="sec" id="sec-hist" hidden>
     <div class="card">
       <h3><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Historial</h3>
@@ -433,7 +446,7 @@ let HISTORY=[], CMP=null, CMPKEYS=null, CMPFILT="all";
 const keyOf=f=>f.rule_id+"|"+f.asset;
 
 /* ===== navegación entre secciones ===== */
-const SECTIONS=["scan","summary","fix","inv","find","hist"];
+const SECTIONS=["scan","summary","fix","inv","find","rep","hist"];
 const SEC_CARD={summary:"summaryCard",fix:"ffCard",inv:"invCard",find:"resCard"};
 const SEC_EMPTY={summary:"Lanza un escaneo para ver el resumen.",fix:"Aquí aparece lo prioritario tras un escaneo.",inv:"El inventario aparece en escaneos autenticados (SSH/WinRM).",find:"Lanza un escaneo para ver los hallazgos."};
 let CURSEC="scan";
@@ -867,6 +880,41 @@ footer{margin-top:22px;color:#8c959f;font-size:11px;border-top:1px solid #d0d7de
 }
 $("expReport").onclick=()=>{const h=reportHTML();if(!h)return;
   download(`informe-vulnerscan-${(JOB&&JOB.id)||"scan"}.html`,"text/html;charset=utf-8",h)};
+
+/* ===== reputación de URLs (análisis pasivo) ===== */
+const VERDICT_STYLE={"maligna":["var(--p0)","#fff"],"sospechosa":["var(--p2)","var(--ink)"],"sin detecciones":["var(--ok)","#fff"],"sin datos":["var(--arena)","var(--fg)"]};
+async function runRep(){
+  const u=$("repUrl").value.trim();
+  showErr("repErr","");
+  if(!u){showErr("repErr","Escribe una URL.");return}
+  if(!$("key").value.trim()){$("profpop").hidden=false;$("key").focus();showErr("repErr","Falta la API key (perfil, arriba a la derecha).");return}
+  $("repGo").disabled=true;$("repOut").replaceChildren(el("div","Consultando reputaciones…","hint"));
+  let r,j;
+  try{r=await fetch("/api/reputation?url="+encodeURIComponent(u),{headers:H()});j=await r.json().catch(()=>({}))}
+  catch(e){$("repGo").disabled=false;$("repOut").replaceChildren();showErr("repErr","No hay conexión con el servidor.");return}
+  $("repGo").disabled=false;
+  if(!r.ok){$("repOut").replaceChildren();showErr("repErr",typeof j.detail==="string"?j.detail:"Error "+r.status);return}
+  renderRep(j);
+}
+function renderRep(d){
+  const box=$("repOut");box.replaceChildren();
+  const head=el("div",null,"verdict-row");
+  const st=VERDICT_STYLE[d.verdict]||VERDICT_STYLE["sin datos"];
+  const badge=el("span",d.verdict.toUpperCase(),"verdict");badge.style.background=st[0];badge.style.color=st[1];
+  head.append(badge,el("span","confianza: "+d.confidence,"hint"));
+  box.append(head,el("div",d.url,"asset"));
+  const tbl=document.createElement("table");const thead=document.createElement("thead");const hr=document.createElement("tr");
+  ["Fuente","Estado","Detalle"].forEach(t=>hr.append(el("th",t)));thead.append(hr);tbl.append(thead);
+  const tb=document.createElement("tbody");
+  const NAME={ok:"consultada",sin_clave:"sin clave",sin_informe:"sin informe previo",error:"error"};
+  d.sources.forEach(s=>{const tr=document.createElement("tr");
+    tr.append(el("td",s.source),el("td",NAME[s.status]||s.status),el("td",s.detail));tb.append(tr)});
+  tbl.append(tb);const wrap=el("div",null,"repwrap");wrap.append(tbl);box.append(wrap);
+  if(d.heuristics.length)box.append(el("div","Señales de la propia URL: "+d.heuristics.join(" · "),"hint"));
+  box.append(el("p",d.note,"hint"));
+}
+$("repGo").onclick=runRep;
+$("repUrl").addEventListener("keydown",e=>{if(e.key==="Enter")runRep()});
 
 renderSpecs(null);showSection("scan");
 loadHistory();

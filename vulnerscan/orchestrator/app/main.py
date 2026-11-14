@@ -9,6 +9,7 @@ from .normalize import normalize
 from .prioritize import fix_first, prioritize
 from .scope import detect_type, in_scope
 from . import store
+from . import reputation
 
 API_KEY = os.environ["API_KEY"]
 app = FastAPI(title="vulnerscan", docs_url=None, redoc_url=None)
@@ -61,6 +62,14 @@ async def run_job(jid, req, ttype):
             job["status"], job["errors"] = "failed", job["errors"] + [str(e)]
         finally:
             store.save(job)
+
+@app.get("/api/reputation", dependencies=[Depends(auth)])
+async def reputation_check(url: str):
+    """¿Es maligna esta URL? Análisis pasivo: no se contacta el sitio analizado."""
+    try:
+        return await reputation.analyze(url)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 @app.get("/api/scans", dependencies=[Depends(auth)])
 def list_scans():
