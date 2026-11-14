@@ -16,6 +16,9 @@ async def run_plan(target, ttype, modules, options, job):
                     except Exception: det = r.text[:200]
                     raise RuntimeError(f"HTTP {r.status_code}: {det}")
                 res = r.json()
+            except httpx.ConnectError:
+                errors.append(f"{mod}: el plugin no responde en {URLS[mod]} (¿está levantado su contenedor?)")
+                return {"findings": [], "meta": {}}
             except Exception as e:
                 errors.append(f"{mod}: {e}"); return {"findings": [], "meta": {}}
             raw.extend(res.get("findings", []))

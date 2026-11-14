@@ -1,5 +1,5 @@
 """Motor de checks declarativos (YAML). Sin código arbitrario: solo peticiones seguras + matchers."""
-import glob, re, socket
+import glob, os, re, socket
 from urllib.parse import urlparse
 import requests, yaml
 from fastapi import FastAPI
@@ -9,7 +9,7 @@ app = FastAPI()
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 def load():
-    for f in glob.glob("/checks/*.y*ml"):
+    for f in glob.glob(os.path.join(os.getenv("CHECKS_DIR", "/checks"), "*.y*ml")):
         try:
             d = yaml.safe_load(open(f))
             if isinstance(d, dict) and d.get("protocol") in ("http", "tcp") and d.get("id"): yield d
@@ -47,8 +47,11 @@ def run_tcp(chk, host):
 @app.post("/scan")
 def scan(req: dict):
     target = req["target"]
-    u = urlparse(target if "://" in target else "//" + target)
-    host, base = u.hostname, (target if "://" in target else f"https://{target}")
+    if "://" not in target:
+        target = "https://" + target
+    u = urlparse(target)
+    host = u.hostname
+    base = f"{u.scheme}://{u.netloc}"   # solo el origen: las rutas de los checks se añaden a esto
     s, out = requests.Session(), []
     for chk in load():
         ev = run_http(chk, base, s) if chk["protocol"] == "http" else run_tcp(chk, host)

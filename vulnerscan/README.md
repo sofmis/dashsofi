@@ -37,7 +37,7 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
 - `NVD_API_KEY` no es necesaria para el cotejo OSV (Linux), pero sí acelera el cotejo CPE→CVE de Windows y del resto.
 
 ## Persistencia e interfaz
-- Los escaneos se guardan en **SQLite** (`./data/vulnerscan.db`, volumen) y sobreviven a reinicios; `MAX_SCANS`
+- Los escaneos se guardan en **SQLite** (volumen de Docker `vsdata`) y sobreviven a reinicios; `MAX_SCANS`
   limita el historial (500 por defecto). Para gran escala: PostgreSQL + cola.
 - La interfaz incluye resumen con anillo de riesgo y barra de severidad, **barra de progreso en vivo** durante el
   escaneo, filtros/búsqueda, **comparación entre dos escaneos** (nuevas/resueltas), detalle expandible, historial,

@@ -3,7 +3,7 @@ services:
     build: {context: ., dockerfile: orchestrator/Dockerfile}
     ports: ["127.0.0.1:8000:8000"]
     env_file: .env
-    volumes: ["./checks:/checks", "./data:/data"]   # ./data: SQLite (historial persistente)
+    volumes: ["./checks:/checks", "vsdata:/data"]   # vsdata: SQLite (historial persistente, volumen con nombre)
     depends_on: [network, web, custom, code, osaudit]
   network:
     build: {context: ./plugins, dockerfile: network/Dockerfile}
@@ -25,3 +25,6 @@ services:
     env_file: .env                  # ALLOWED_TARGETS: las reglas solo actúan sobre estos hosts
     ports: ["127.0.0.1:8081:8081", "127.0.0.1:8082:8080"]
     volumes: ["./plugins/proxy/rules.json:/rules/rules.json:ro", "./proxy-logs:/logs"]
+
+volumes:
+  vsdata:

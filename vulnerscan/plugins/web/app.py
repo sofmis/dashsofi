@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 import requests
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from common import finding
 import apiprobe, checks, crawler, fuzz, render
 
@@ -9,6 +9,8 @@ app = FastAPI()
 
 @app.post("/scan")
 def scan(req: dict):
+    if not req.get("target"):
+        raise HTTPException(400, "Falta el objetivo")
     url, o = req["target"], req.get("options", {})
     if "://" not in url:
         url = "https://" + url

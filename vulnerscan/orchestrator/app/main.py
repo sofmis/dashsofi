@@ -40,7 +40,7 @@ async def create_scan(req: ScanRequest):
         raise HTTPException(403, "Objetivo fuera de ALLOWED_TARGETS")
     jid = uuid.uuid4().hex[:12]
     JOBS[jid] = {"id": jid, "target": req.target, "type": ttype, "status": "queued", "progress": [],
-                 "errors": [], "findings": [], "fix_first": [], "created": time.time()}
+                 "errors": [], "findings": [], "fix_first": [], "meta": {}, "created": time.time()}
     for old in sorted(JOBS, key=lambda k: JOBS[k]["created"])[:-50]: JOBS.pop(old, None)
     store.save(JOBS[jid])
     asyncio.create_task(run_job(jid, req, ttype))
