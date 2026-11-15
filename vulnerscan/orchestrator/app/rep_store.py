@@ -11,6 +11,7 @@ from . import db
 from .accounts import AuthError
 
 REP_DAILY = int(os.getenv("REP_DAILY_LIMIT", "30"))
+REP_GLOBAL_DAILY = int(os.getenv("REP_GLOBAL_DAILY_LIMIT", "400"))   # consultas reales por día para toda la página
 HISTORY_KEEP = 200
 
 
@@ -29,6 +30,16 @@ def take_quota(user_id):
         c.execute("INSERT INTO rep_usage(user_id,day,n) VALUES(%s,CURRENT_DATE,1) "
                   "ON CONFLICT(user_id,day) DO UPDATE SET n=rep_usage.n+1", (int(user_id),))
     return REP_DAILY - (used + 1)
+
+
+def take_global():
+    """Cuenta una consulta REAL a VirusTotal/Google (no caché) contra el límite diario de toda la página."""
+    with db.connect() as c:
+        row = c.execute("INSERT INTO rep_global(day,n) VALUES(CURRENT_DATE,1) "
+                        "ON CONFLICT(day) DO UPDATE SET n=rep_global.n+1 RETURNING n").fetchone()
+    if row["n"] > REP_GLOBAL_DAILY:
+        raise AuthError(429, "La página alcanzó hoy su límite de consultas. Vuelve mañana; "
+                             "las URLs consultadas recientemente sí se muestran.")
 
 
 def cache_get(url):

@@ -26,7 +26,7 @@ with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as c:
     c.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
 
 from fastapi.testclient import TestClient  # noqa: E402
-from app import accounts, main, mailer, reputation  # noqa: E402
+from app import accounts, main, mailer, rep_store, reputation  # noqa: E402
 
 
 FAILS = []
@@ -183,6 +183,47 @@ def main_tests():
     check("sesión inválida no da acceso", TestClient(main.app).get("/api/reputation/history").status_code == 401)
 
 
+def new_tests():
+    """Correo caído (no deja cuentas a medias) y límite global de consultas reales."""
+    import time
+    ts = str(int(time.time()))
+    with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as c:
+        c.execute("DELETE FROM signups")
+        c.execute("DELETE FROM rep_global")
+    real_send = mailer.send
+
+    def caido(*a, **k):
+        raise RuntimeError("SMTP caído")
+    mailer.send = caido
+    cl = TestClient(main.app)
+    email = f"fallo-{ts}@ejemplo.com"
+    r = cl.post("/api/auth/register", json={"email": email, "password": STRONG})
+    check("correo caído: registro responde 503 con mensaje claro",
+          r.status_code == 503 and "correo" in r.json()["detail"], r.text)
+    with psycopg.connect(os.environ["DATABASE_URL"]) as c:
+        row = c.execute("SELECT 1 FROM users WHERE email=%s", (email,)).fetchone()
+    check("correo caído: la cuenta NO queda creada", row is None)
+    mailer.send = real_send
+    r = cl.post("/api/auth/register", json={"email": email, "password": STRONG})
+    check("tras recuperar el correo, puede registrarse (202)", r.status_code == 202, r.text)
+
+    # --- límite global de consultas reales (no caché)
+    rep_store.REP_GLOBAL_DAILY = 2
+    rep_store.REP_DAILY = 10
+    g = TestClient(main.app)
+    register_verify(g, f"gamma-{ts}@ejemplo.com")
+    g.post("/api/auth/login", json={"email": f"gamma-{ts}@ejemplo.com", "password": STRONG})
+    u1, u2, u3 = (f"https://g{ts}-{i}.example.org/" for i in range(3))
+    check("límite global: 1.ª consulta real", g.get("/api/reputation", params={"url": u1}).status_code == 200)
+    check("límite global: 2.ª consulta real", g.get("/api/reputation", params={"url": u2}).status_code == 200)
+    r = g.get("/api/reputation", params={"url": u3})
+    check("límite global: 3.ª consulta real se bloquea (429)", r.status_code == 429, str(r.status_code))
+    r = g.get("/api/reputation", params={"url": u1})
+    check("límite global: una URL en caché sigue funcionando", r.status_code == 200 and r.json()["cached"] is True)
+    rep_store.REP_GLOBAL_DAILY = 400
+    rep_store.REP_DAILY = 3
+
+
 def store_isolation():
     from app import store
     store.save({"id": "job-A", "user_id": 1, "target": "x", "type": "web", "status": "done", "created": 1.0})
@@ -193,6 +234,7 @@ def store_isolation():
 
 if __name__ == "__main__":
     main_tests()
+    new_tests()
     store_isolation()
     print("\n" + ("ALL PASS" if not FAILS else f"FAILURES: {FAILS}"))
     sys.exit(1 if FAILS else 0)

@@ -82,11 +82,16 @@ def register(email, pw, ip, base_url):
         exists = c.execute("SELECT 1 FROM users WHERE email=%s", (email,)).fetchone()
     if not exists:
         tok = secrets.token_urlsafe(32)
+        # Primero el correo: si no se puede enviar, NO se crea la cuenta (así puede volver a intentarlo).
+        try:
+            mailer.send(email, "Confirma tu cuenta de VulnerScan",
+                        f"Confirma tu correo abriendo este enlace:\n{base_url}/?verify={tok}\n\n"
+                        "Si no fuiste tú, ignora este mensaje.")
+        except Exception:
+            raise AuthError(503, "El servicio de correo no está disponible en este momento. Inténtalo más tarde.")
         with db.connect() as c:
             c.execute("INSERT INTO users(email,pw_hash,verify_hash) VALUES(%s,%s,%s) ON CONFLICT (email) DO NOTHING",
                       (email, hash_password(pw), _h(tok)))
-        mailer.send(email, "Confirma tu cuenta de VulnerScan",
-                    f"Confirma tu correo abriendo este enlace:\n{base_url}/?verify={tok}\n\nSi no fuiste tú, ignora este mensaje.")
     return GENERIC_SIGNUP
 
 

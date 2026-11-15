@@ -178,6 +178,7 @@ async def reputation_check(url: str, user=Depends(verified_user)):
     if cached:
         res = {**cached, "cached": True}
     else:
+        rep_store.take_global()          # límite diario de toda la página (cuota de VirusTotal/Google)
         res = {**(await reputation.analyze(u)), "cached": False}
         if any(s["status"] == "ok" for s in res["sources"]):
             rep_store.cache_put(u, res)

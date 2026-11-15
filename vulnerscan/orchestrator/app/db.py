@@ -28,6 +28,7 @@ SCHEMA = [
     "CREATE TABLE IF NOT EXISTS signups(id BIGSERIAL PRIMARY KEY, ip TEXT, at TIMESTAMPTZ NOT NULL DEFAULT now())",
     "CREATE TABLE IF NOT EXISTS rep_usage(user_id INT NOT NULL, day DATE NOT NULL, n INT NOT NULL DEFAULT 0, "
     "PRIMARY KEY(user_id, day))",
+    "CREATE TABLE IF NOT EXISTS rep_global(day DATE PRIMARY KEY, n INT NOT NULL DEFAULT 0)",
     "CREATE TABLE IF NOT EXISTS rep_cache(url_hash TEXT PRIMARY KEY, result JSONB NOT NULL, "
     "at TIMESTAMPTZ NOT NULL DEFAULT now())",
     # user_id sin clave foránea: el administrador por API_KEY usa el id 0 (no es una fila de users).
