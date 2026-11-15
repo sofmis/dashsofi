@@ -9,6 +9,18 @@ Orquestador (FastAPI) + plugins Docker (red, web, código/contenedores, checks p
 Requisito único: Docker Desktop abierto (macOS/Windows) o Docker Engine + Compose (Linux). Necesita ~10 GB libres.
 Si falla con `input/output error`: liberar disco, `docker builder prune -f` y subir el límite de disco en Docker Desktop.
 
+## Página pública (Fase A): cuentas y reputación de URLs
+- `MODE=public` sirve una página con **cuentas (email + contraseña)**, verificación por correo, recuperación de
+  contraseña, consulta de reputación **sin visitar el sitio** y historial privado por usuario.
+- El escaneo activo queda **desactivado** (`ENABLE_ACTIVE_SCANS=false`) hasta la Fase B (verificación de dominios).
+- Límites: consultas de reputación por usuario y día (`REP_DAILY_LIMIT`), caché de 24 h, bloqueo tras 8 intentos
+  fallidos por cuenta, y máximo 5 registros por IP y hora.
+- Seguridad: contraseñas con scrypt, tokens de un solo uso guardados solo como hash, cookies HttpOnly/SameSite,
+  cabeceras CSP, X-Frame-Options y HSTS (con `COOKIE_SECURE=1`).
+- Correo: sin `SMTP_HOST` el servidor se niega a enviar (salvo `MAIL_DEV=1` en desarrollo).
+- Despliegue: `render.yaml` (blueprint de Render con PostgreSQL gestionado). Variables en `.env.example`.
+- Pruebas: `DATABASE_URL=… ALLOW_DB_RESET=1 python tests/test_saas.py` (usa una base de PRUEBA: borra su esquema).
+
 ## Arranque manual
     cp .env.example .env     # define API_KEY y ALLOWED_TARGETS (falla cerrado: vacío = no se escanea nada)
     docker compose up --build
@@ -37,7 +49,7 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
 - `NVD_API_KEY` no es necesaria para el cotejo OSV (Linux), pero sí acelera el cotejo CPE→CVE de Windows y del resto.
 
 ## Persistencia e interfaz
-- Los escaneos se guardan en **SQLite** (volumen de Docker `vsdata`) y sobreviven a reinicios; `MAX_SCANS`
+- Los escaneos, cuentas e historial se guardan en **PostgreSQL** (volumen de Docker `pgdata`) y sobreviven a reinicios; `MAX_SCANS_PER_USER`
   limita el historial (500 por defecto). Para gran escala: PostgreSQL + cola.
 - La interfaz incluye resumen con anillo de riesgo y barra de severidad, **barra de progreso en vivo** durante el
   escaneo, filtros/búsqueda, **comparación entre dos escaneos** (nuevas/resueltas), detalle expandible, historial,
@@ -88,7 +100,7 @@ distribuidor, estos hallazgos son **confirmados** (no "potencial por versión"),
 YAML en `./checks` o desde la UI (`POST /api/checks`). Solo GET/HEAD/OPTIONS o TCP + matchers. Ver `checks/`.
 
 ## Límites conocidos
-- Escaneos persistidos en SQLite (ver arriba); para producción a escala: PostgreSQL + cola (Celery/Arq) + RBAC por usuario.
+- Escaneos y cuentas en PostgreSQL (ver arriba). Para más carga: cola persistente (Celery/Arq) y pool de conexiones.
 - Los CVE por versión (NVD/CPE) quedan como "potencial" (confianza 0.55) por backports de las distribuciones; los hallazgos
   verificados activamente (checks, fuzzing) o corroborados por varios plugins suben a "confirmado". Así se reducen falsos positivos.
 - Auditoría de SO autenticada: implementada vía OSV.dev (módulo `osaudit`); Windows cotejado por CPE/NVD. Pendiente:

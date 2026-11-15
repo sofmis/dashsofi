@@ -1,0 +1,254 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VulnerScan · ¿Es maligna esta URL?</title>
+<meta name="description" content="Consulta la reputación de cualquier URL con VirusTotal y Google Safe Browsing, sin visitar el sitio.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A3875A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{--marfil:#F3F2F0;--blanco:#EEECE8;--arena:#E5E0D9;--greige:#DBD3C9;--topo:#CEC3B7;--beige:#B49D7B;--caramelo:#A3875A;
+  --fg:#3A332B;--mut:#6B6156;--br:var(--greige);--br2:var(--topo);--ac:var(--caramelo);--ac2:var(--beige);--ink:#1F180F;
+  --ok:#5E7F5A;--p0:#A8432F;--p2:#B8912F;--shadow:rgba(90,75,55,.20);
+  --font:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{min-height:100%}
+body{margin:0;font:14px/1.6 var(--font);color:var(--fg);background:var(--marfil);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;left:50%;top:50%;width:170vmax;height:170vmax;margin:-85vmax 0 0 -85vmax;
+  background:url(assets/bg.jpg) center/cover no-repeat;opacity:.95;z-index:0;pointer-events:none;animation:spin 180s linear infinite}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){body::before{animation:none}}
+.wrap{position:relative;z-index:1;max-width:880px;margin:0 auto;padding:22px 18px 60px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:6px 0 18px}
+.mark{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--ink);
+  background:linear-gradient(145deg,var(--beige),var(--caramelo));box-shadow:0 6px 16px -8px rgba(120,95,55,.7)}
+.mark svg{width:20px;height:20px}
+h1{font-size:20px;font-weight:800;margin:0;letter-spacing:.01em}
+.sub{color:var(--mut);font-size:12.5px}
+.spacer{flex:1}
+.who{font-family:var(--mono);font-size:12px;color:var(--mut)}
+.card{background:rgba(255,255,255,.74);border:1px solid rgba(206,195,183,.75);border-radius:16px;padding:20px;margin:16px 0;
+  box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 22px 44px -30px var(--shadow);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.card>h2{margin:0 0 12px;font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--mut);font-weight:500}
+label.fld{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}
+input{font:inherit;color:var(--fg);padding:10px 12px;border-radius:10px;border:1px solid var(--br2);background:rgba(255,255,255,.8);
+  box-shadow:inset 0 1px 2px rgba(90,75,55,.12);width:100%;min-width:0}
+input:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px rgba(163,135,90,.25)}
+button{font:inherit;font-weight:700;color:var(--ink);background:var(--ac);border:1px solid rgba(90,70,40,.28);padding:10px 16px;border-radius:10px;cursor:pointer;
+  box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 10px 20px -12px rgba(120,95,55,.75);transition:background .15s}
+button:hover{background:var(--ac2)}button:disabled{opacity:.55;cursor:not-allowed}
+button.ghost{background:rgba(255,255,255,.6);color:var(--fg);border-color:var(--br2);box-shadow:none}
+button.ghost:hover{background:var(--arena)}
+.tabs{display:flex;gap:6px;margin-bottom:6px}
+.tabs button{flex:1;background:transparent;color:var(--fg);border-color:var(--br2);box-shadow:none}
+.tabs button[aria-selected=true]{background:var(--ac);color:var(--ink)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>input{flex:1;min-width:220px}
+.hint{color:var(--mut);font-size:12.5px}
+.msg{margin:12px 0 0;padding:11px 13px;border-radius:10px;font-size:13px;background:rgba(94,127,90,.10);border:1px solid rgba(94,127,90,.35);color:#33502F}
+.msg.err{background:rgba(168,67,47,.09);border-color:rgba(168,67,47,.40);color:#7A2E20}
+.verdict-row{display:flex;align-items:center;gap:12px;margin:16px 0 6px;flex-wrap:wrap}
+.verdict{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.08em;padding:7px 14px;border-radius:9px;color:#fff;box-shadow:0 8px 18px -12px var(--shadow)}
+.v-maligna{background:var(--p0)}.v-sospechosa{background:var(--p2);color:var(--ink)!important}.v-sin{background:var(--ok)}.v-datos{background:var(--arena);color:var(--fg)!important}
+.url{font-family:var(--mono);font-size:12px;color:var(--mut);word-break:break-all}
+table{width:100%;border-collapse:separate;border-spacing:0;margin-top:12px}
+th,td{text-align:left;padding:10px;border-bottom:1px solid var(--br);vertical-align:top;font-size:13px}
+th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--mut);font-weight:500;background:rgba(219,211,201,.6)}
+.hist{display:flex;flex-direction:column;gap:7px;max-height:340px;overflow:auto}
+.hist div{display:flex;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--br);border-radius:10px;background:rgba(255,255,255,.7);font-size:13px}
+.hist .u{font-family:var(--mono);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist .t{font-size:11px;color:var(--mut);white-space:nowrap}
+.tiny{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
+footer{margin-top:24px;color:var(--mut);font-size:12px;text-align:center}
+</style></head><body>
+<div class="wrap">
+<header>
+  <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
+  <div><h1>VulnerScan</h1><div class="sub">Reputación de URLs · análisis pasivo</div></div>
+  <span class="spacer"></span>
+  <span class="who" id="who"></span>
+  <button class="ghost" id="logout" hidden>Salir</button>
+</header>
+
+<!-- ===== acceso ===== -->
+<section id="sec-auth" class="card" hidden>
+  <h2 id="authTitle">Entrar</h2>
+  <div class="tabs" role="tablist">
+    <button id="tabLogin" role="tab" aria-selected="true">Entrar</button>
+    <button id="tabSignup" role="tab" aria-selected="false">Crear cuenta</button>
+  </div>
+  <form id="formLogin" autocomplete="on">
+    <label class="fld" for="lEmail">Correo</label><input id="lEmail" type="email" autocomplete="username" required>
+    <label class="fld" for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" required>
+    <div class="row" style="margin-top:14px"><button type="submit">Entrar</button>
+      <button type="button" class="ghost" id="toForgot">¿Olvidaste la contraseña?</button></div>
+  </form>
+  <form id="formSignup" hidden autocomplete="on">
+    <label class="fld" for="sEmail">Correo</label><input id="sEmail" type="email" autocomplete="username" required>
+    <label class="fld" for="sPass">Contraseña (mínimo 10 caracteres)</label><input id="sPass" type="password" minlength="10" autocomplete="new-password" required>
+    <p class="hint" style="margin:10px 0 0">Te enviaremos un correo para confirmar tu cuenta.</p>
+    <div class="row" style="margin-top:14px"><button type="submit">Crear cuenta</button></div>
+  </form>
+  <form id="formForgot" hidden>
+    <label class="fld" for="fEmail">Correo de tu cuenta</label><input id="fEmail" type="email" required>
+    <div class="row" style="margin-top:14px"><button type="submit">Enviar enlace</button>
+      <button type="button" class="ghost" id="backLogin">Volver</button></div>
+  </form>
+  <form id="formReset" hidden>
+    <label class="fld" for="rPass">Nueva contraseña (mínimo 10 caracteres)</label><input id="rPass" type="password" minlength="10" autocomplete="new-password" required>
+    <div class="row" style="margin-top:14px"><button type="submit">Guardar contraseña</button></div>
+  </form>
+  <div class="msg err" id="authErr" hidden></div>
+  <div class="msg" id="authOk" hidden></div>
+</section>
+
+<!-- ===== aplicación ===== -->
+<section id="sec-app" hidden>
+  <div class="msg err" id="verifyBanner" hidden>Confirma tu correo para usar las consultas. Revisa tu bandeja (y spam) y abre el enlace.</div>
+  <div class="card">
+    <h2>¿Es maligna esta URL?</h2>
+    <p class="hint" style="margin:0 0 12px">Escribe cualquier URL (con o sin https://). Consultamos VirusTotal y Google Safe Browsing <b>sin visitar el sitio</b>.</p>
+    <div class="row"><input id="url" type="text" placeholder="https://ejemplo.com/ruta o ejemplo.com" autocomplete="off" aria-label="URL a analizar"><button id="go">Analizar</button></div>
+    <div class="msg err" id="repErr" hidden></div>
+    <div id="out"></div>
+    <p class="tiny" id="quota" style="margin:14px 0 0"></p>
+  </div>
+  <div class="card">
+    <h2>Mi historial</h2>
+    <div class="hist" id="hist"><span class="hint">Aún no has consultado ninguna URL.</span></div>
+  </div>
+</section>
+
+<footer>El análisis es pasivo: el sitio consultado no recibe visitas. Un resultado "sin detecciones" no garantiza que sea seguro.</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s);
+const CLASS = {"maligna": "v-maligna", "sospechosa": "v-sospechosa", "sin detecciones": "v-sin", "sin datos": "v-datos"};
+const STATUS = {ok: "consultada", sin_clave: "sin clave", sin_informe: "sin informe previo", error: "error"};
+
+async function api(path, opts = {}) {
+  const init = {method: opts.method || "GET", credentials: "same-origin", headers: {}};
+  if (opts.body) { init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opts.body); }
+  const r = await fetch(path, init);
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Error " + r.status);
+  return j;
+}
+function show(id, on) { $(id).hidden = !on; }
+function flash(id, text) { const el = $(id); el.textContent = text; el.hidden = !text; }
+
+function setTab(login) {
+  $("tabLogin").setAttribute("aria-selected", login); $("tabSignup").setAttribute("aria-selected", !login);
+  show("formLogin", login); show("formSignup", !login); show("formForgot", false); show("formReset", false);
+  $("authTitle").textContent = login ? "Entrar" : "Crear cuenta";
+  flash("authErr", ""); flash("authOk", "");
+}
+$("tabLogin").onclick = () => setTab(true);
+$("tabSignup").onclick = () => setTab(false);
+$("toForgot").onclick = () => { show("formLogin", false); show("formForgot", true); $("authTitle").textContent = "Recuperar contraseña"; flash("authErr", ""); };
+$("backLogin").onclick = () => setTab(true);
+
+$("formLogin").onsubmit = async e => {
+  e.preventDefault(); flash("authErr", "");
+  try { await api("/api/auth/login", {method: "POST", body: {email: $("lEmail").value, password: $("lPass").value}}); await start(); }
+  catch (err) { flash("authErr", err.message); }
+};
+$("formSignup").onsubmit = async e => {
+  e.preventDefault(); flash("authErr", "");
+  try {
+    const r = await api("/api/auth/register", {method: "POST", body: {email: $("sEmail").value, password: $("sPass").value}});
+    $("sPass").value = ""; flash("authOk", r.message);
+  } catch (err) { flash("authErr", err.message); }
+};
+$("formForgot").onsubmit = async e => {
+  e.preventDefault();
+  try { const r = await api("/api/auth/forgot", {method: "POST", body: {email: $("fEmail").value}}); flash("authOk", r.message); }
+  catch (err) { flash("authErr", err.message); }
+};
+$("formReset").onsubmit = async e => {
+  e.preventDefault(); const token = new URLSearchParams(location.search).get("reset");
+  try {
+    const r = await api("/api/auth/reset", {method: "POST", body: {token, password: $("rPass").value}});
+    history.replaceState(null, "", "/"); $("rPass").value = ""; setTab(true); flash("authOk", r.message);
+  } catch (err) { flash("authErr", err.message); }
+};
+$("logout").onclick = async () => { try { await api("/api/auth/logout", {method: "POST"}); } catch (e) {} location.reload(); };
+
+/* ----- verificación y recuperación desde el enlace del correo ----- */
+async function handleLinks() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("verify")) {
+    try { const r = await api("/api/auth/verify", {method: "POST", body: {token: q.get("verify")}}); flash("authOk", r.message); }
+    catch (err) { flash("authErr", err.message); }
+    history.replaceState(null, "", "/");
+  }
+  if (q.get("reset")) { show("sec-auth", true); show("formLogin", false); show("formSignup", false); show("formReset", true); $("authTitle").textContent = "Nueva contraseña"; }
+}
+
+/* ----- consulta de reputación ----- */
+function renderResult(d) {
+  const out = $("out"); out.replaceChildren();
+  const head = document.createElement("div"); head.className = "verdict-row";
+  const badge = document.createElement("span"); badge.className = "verdict " + (CLASS[d.verdict] || "v-datos");
+  badge.textContent = esc(d.verdict).toUpperCase();
+  const conf = document.createElement("span"); conf.className = "hint"; conf.textContent = "confianza: " + d.confidence + (d.cached ? " · resultado reciente (caché)" : "");
+  head.append(badge, conf);
+  const u = document.createElement("div"); u.className = "url"; u.textContent = d.url;
+  const t = document.createElement("table");
+  t.innerHTML = "<thead><tr><th>Fuente</th><th>Estado</th><th>Detalle</th></tr></thead>";
+  const tb = document.createElement("tbody");
+  d.sources.forEach(s => {
+    const tr = document.createElement("tr");
+    [s.source, STATUS[s.status] || s.status, s.detail].forEach(v => { const td = document.createElement("td"); td.textContent = esc(v); tr.append(td); });
+    tb.append(tr);
+  });
+  t.append(tb);
+  out.append(head, u, t);
+  if (d.heuristics && d.heuristics.length) { const h = document.createElement("p"); h.className = "hint"; h.textContent = "Señales de la propia URL: " + d.heuristics.join(" · "); out.append(h); }
+  const note = document.createElement("p"); note.className = "hint"; note.textContent = d.note; out.append(note);
+  if (typeof d.remaining === "number") $("quota").textContent = "Consultas que te quedan hoy: " + d.remaining;
+}
+async function analyze() {
+  const url = $("url").value.trim(); flash("repErr", "");
+  if (!url) return flash("repErr", "Escribe una URL.");
+  $("go").disabled = true; $("out").replaceChildren();
+  try { renderResult(await api("/api/reputation?url=" + encodeURIComponent(url))); await loadHistory(); }
+  catch (err) { flash("repErr", err.message); }
+  finally { $("go").disabled = false; }
+}
+$("go").onclick = analyze;
+$("url").addEventListener("keydown", e => { if (e.key === "Enter") analyze(); });
+
+async function loadHistory() {
+  const box = $("hist");
+  try {
+    const list = await api("/api/reputation/history");
+    box.replaceChildren();
+    if (!list.length) { const s = document.createElement("span"); s.className = "hint"; s.textContent = "Aún no has consultado ninguna URL."; box.append(s); return; }
+    list.forEach(x => {
+      const row = document.createElement("div");
+      const v = document.createElement("span"); v.className = "tiny"; v.textContent = x.verdict;
+      const u = document.createElement("span"); u.className = "u"; u.textContent = x.url;
+      const tm = document.createElement("span"); tm.className = "t"; tm.textContent = new Date(x.at).toLocaleString();
+      row.append(v, u, tm); box.append(row);
+    });
+  } catch (err) { box.replaceChildren(); }
+}
+
+/* ----- arranque: ¿hay sesión? ----- */
+async function start() {
+  try {
+    const me = await api("/api/auth/me");
+    show("sec-auth", false); show("sec-app", true); show("logout", true);
+    $("who").textContent = me.email + (me.verified ? "" : " · sin confirmar");
+    show("verifyBanner", !me.verified); $("go").disabled = !me.verified; $("url").disabled = !me.verified;
+    await loadHistory();
+  } catch (err) {
+    show("sec-app", false); show("sec-auth", true); show("logout", false); $("who").textContent = "";
+    if (!new URLSearchParams(location.search).get("reset")) setTab(true);
+    await handleLinks();
+  }
+}
+start();
+</script>
+</body></html>
