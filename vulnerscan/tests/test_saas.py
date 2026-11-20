@@ -224,6 +224,49 @@ def new_tests():
     rep_store.REP_DAILY = 3
 
 
+def resend_tests():
+    """Reenvío de confirmación: enlace nuevo, el anterior deja de servir, cooldown y cuentas ya confirmadas."""
+    import time
+    ts = str(int(time.time()))
+    with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as c:
+        c.execute("DELETE FROM resends")
+        c.execute("DELETE FROM signups")
+    rc = TestClient(main.app)
+    email = f"reenvio-{ts}@ejemplo.com"
+    rc.post("/api/auth/register", json={"email": email, "password": STRONG})
+    tok1 = last_token("verify")
+
+    def sent_to(addr):
+        return sum(1 for m in mailer.RECENT if m["to"] == addr)
+
+    before = sent_to(email)
+    r = rc.post("/api/auth/resend", json={"email": email})
+    check("reenvío responde genérico (200)", r.status_code == 200 and "nuevo enlace" in r.json()["message"], r.text)
+    tok2 = last_token("verify")
+    check("reenvío envía un correo nuevo", sent_to(email) == before + 1)
+    check("el enlace nuevo es distinto al anterior", tok2 and tok2 != tok1)
+    r = rc.post("/api/auth/verify", json={"token": tok1})
+    check("el enlace anterior ya no sirve", r.status_code == 400, r.text)
+
+    r = rc.post("/api/auth/resend", json={"email": email})
+    check("segundo reenvío inmediato: no envía (cooldown)", sent_to(email) == before + 1 and r.status_code == 200)
+
+    r = rc.post("/api/auth/verify", json={"token": tok2})
+    check("el enlace nuevo confirma la cuenta", r.status_code == 200, r.text)
+
+    ok_email = f"confirmada-{ts}@ejemplo.com"
+    register_verify(rc, ok_email)
+    before_ok = sent_to(ok_email)
+    r = rc.post("/api/auth/resend", json={"email": ok_email})
+    check("cuenta ya confirmada: respuesta genérica y sin correo",
+          r.status_code == 200 and sent_to(ok_email) == before_ok, r.text)
+
+    r = rc.post("/api/auth/resend", json={"email": "no-existe-nadie@ejemplo.com"})
+    check("correo inexistente: respuesta genérica sin error", r.status_code == 200, r.text)
+    r = rc.post("/api/auth/resend", json={"email": "no es correo"})
+    check("correo mal formado: respuesta genérica sin error", r.status_code == 200, r.text)
+
+
 def store_isolation():
     from app import store
     store.save({"id": "job-A", "user_id": 1, "target": "x", "type": "web", "status": "done", "created": 1.0})
@@ -235,6 +278,7 @@ def store_isolation():
 if __name__ == "__main__":
     main_tests()
     new_tests()
+    resend_tests()
     store_isolation()
     print("\n" + ("ALL PASS" if not FAILS else f"FAILURES: {FAILS}"))
     sys.exit(1 if FAILS else 0)

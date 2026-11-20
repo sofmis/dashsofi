@@ -159,11 +159,14 @@ footer a:hover{color:var(--txt)}
   <div>
     <span class="pill"><i></i>Reputación de URLs · análisis pasivo</span>
     <h1>Revisa cualquier enlace <em>antes de hacer clic.</em></h1>
-    <p class="lead">Consultamos VirusTotal y Google Safe Browsing. El sitio que revisas nunca recibe una visita.</p>
+    <p class="lead">¿Es maligna esta URL? Consultamos VirusTotal y Google Safe Browsing. El sitio que revisas nunca recibe una visita.</p>
 
     <!-- ===== análisis (solo con sesión confirmada) ===== -->
     <section id="sec-app" class="form-analisis" hidden>
-      <div class="msg err" id="verifyBanner" hidden>Confirma tu correo para usar las consultas. Revisa tu bandeja (y spam) y abre el enlace.</div>
+      <div class="msg err" id="verifyBanner" hidden>
+        <div>Confirma tu correo para usar las consultas. Revisa tu bandeja (y spam) y abre el enlace.</div>
+        <div class="foot-actions" style="margin-top:10px"><button class="btn ghost sm" id="resend" type="button">Reenviar correo</button><span class="hint" id="resendMsg" hidden></span></div>
+      </div>
       <div class="row"><input id="url" type="text" placeholder="https://ejemplo.com/ruta o ejemplo.com" autocomplete="off" aria-label="URL a analizar"><button class="btn" id="go">Analizar →</button></div>
       <div class="msg err" id="repErr" hidden></div>
       <p class="quota" id="quota"></p>
@@ -373,10 +376,20 @@ async function loadHistory() {
   } catch (err) { box.replaceChildren(); }
 }
 
+/* ----- reenviar el correo de confirmación ----- */
+let ME_EMAIL = "";
+$("resend").onclick = async () => {
+  const btn = $("resend"); btn.disabled = true; flash("resendMsg", "");
+  try { const r = await api("/api/auth/resend", {method: "POST", body: {email: ME_EMAIL}}); flash("resendMsg", r.message); }
+  catch (err) { flash("resendMsg", err.message); }
+  finally { setTimeout(() => { btn.disabled = false; }, 30000); }
+};
+
 /* ----- arranque: ¿hay sesión? ----- */
 async function start() {
   try {
     const me = await api("/api/auth/me");
+    ME_EMAIL = me.email;
     show("sec-auth", false); show("sec-app", true); show("historial", true); show("logout", true);
     $("who").textContent = me.email + (me.verified ? "" : " · sin confirmar");
     show("verifyBanner", !me.verified); $("go").disabled = !me.verified; $("url").disabled = !me.verified;

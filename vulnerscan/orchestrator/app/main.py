@@ -132,6 +132,11 @@ def verify(body: TokenIn):
     return {"ok": True, "message": "Correo confirmado. Ya puedes usar todas las funciones."}
 
 
+@app.post("/api/auth/resend")
+def resend(body: ForgotIn, request: Request):
+    return {"message": accounts.resend_verification(body.email, client_ip(request), PUBLIC_URL)}
+
+
 @app.post("/api/auth/login")
 def login(body: Credentials, request: Request):
     tok, verified = accounts.login(body.email, body.password, client_ip(request))

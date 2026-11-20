@@ -21,7 +21,10 @@ COMMON = {"1234567890", "password12", "qwertyuiop1", "contraseña12", "vulnersca
 SESSION_DAYS = int(os.getenv("SESSION_DAYS", "14"))
 FAILS_PER_ACCOUNT, FAILS_PER_IP = 8, 40          # en 15 minutos
 SIGNUPS_PER_IP_HOUR = 5
+RESEND_COOLDOWN_MIN = 2            # un reenvío por correo cada 2 minutos
+RESENDS_PER_IP_HOUR = 10
 GENERIC_SIGNUP = "Si el correo es válido, te enviamos un enlace para confirmar la cuenta."
+GENERIC_RESEND = "Si tu cuenta aún no está confirmada, te enviamos un nuevo enlace."
 GENERIC_FORGOT = "Si el correo existe, te enviamos un enlace para restablecer la contraseña."
 
 
@@ -102,6 +105,38 @@ def verify_email(tok):
     if not row:
         raise AuthError(400, "Enlace no válido o ya usado")
     return True
+
+
+def resend_verification(email, ip, base_url):
+    """Genera un enlace nuevo (invalida el anterior) solo si la cuenta existe y no está confirmada.
+    Responde siempre igual para no revelar qué correos existen."""
+    try:
+        email = normalize_email(email)
+    except AuthError:
+        return GENERIC_RESEND
+    with db.connect() as c:
+        n = c.execute("SELECT count(*) AS n FROM resends WHERE ip=%s AND at > now() - interval '1 hour'",
+                      (ip,)).fetchone()["n"]
+        if n >= RESENDS_PER_IP_HOUR:
+            raise AuthError(429, "Demasiados reenvíos desde tu red. Inténtalo más tarde.")
+        recent = c.execute("SELECT 1 FROM resends WHERE email=%s AND at > now() - make_interval(mins => %s)",
+                           (email, RESEND_COOLDOWN_MIN)).fetchone()
+        if recent:
+            return GENERIC_RESEND
+        c.execute("INSERT INTO resends(ip,email) VALUES(%s,%s)", (ip, email))
+        row = c.execute("SELECT id, verified FROM users WHERE email=%s", (email,)).fetchone()
+    if not row or row["verified"]:
+        return GENERIC_RESEND
+    tok = secrets.token_urlsafe(32)
+    try:
+        mailer.send(email, "Confirma tu cuenta de VulnerScan",
+                    f"Confirma tu correo abriendo este enlace:\n{base_url}/?verify={tok}\n\n"
+                    "Si no fuiste tú, ignora este mensaje.")
+    except Exception:
+        raise AuthError(503, "El servicio de correo no está disponible en este momento. Inténtalo más tarde.")
+    with db.connect() as c:
+        c.execute("UPDATE users SET verify_hash=%s WHERE id=%s", (_h(tok), row["id"]))
+    return GENERIC_RESEND
 
 
 def _throttle(c, ip, email):
