@@ -34,7 +34,7 @@ def validate_url(url):
     if any(c.isspace() for c in u):
         raise ValueError("La URL no puede tener espacios")
     if not re.match(r"^[a-z][a-z0-9+.-]*://", u, re.I):
-        u = "http://" + u
+        u = "https://" + u          # casi todos los sitios usan https; VirusTotal guarda reportes por URL exacta
     p = urlparse(u)
     if p.scheme not in ("http", "https") or not p.hostname:
         raise ValueError("URL no válida (usa http:// o https://)")

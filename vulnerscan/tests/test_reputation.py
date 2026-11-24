@@ -80,7 +80,8 @@ def run(coro):
 
 
 def test_validation():
-    check("acepta URL sin esquema", rep.validate_url("ejemplo.com") == "http://ejemplo.com")
+    check("acepta URL sin esquema y usa https por defecto", rep.validate_url("ejemplo.com") == "https://ejemplo.com")
+    check("respeta http si se escribe", rep.validate_url("http://ejemplo.com") == "http://ejemplo.com")
     check("acepta https", rep.validate_url("https://ejemplo.com/a?b=1") == "https://ejemplo.com/a?b=1")
     for bad, name in [("", "vacía"), ("http://", "sin host"), ("ftp://x.com", "esquema ftp"),
                       ("http://x.com/a b", "con espacios"), ("http://" + "a" * 2100, "demasiado larga")]:
